@@ -1,0 +1,2210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Page Insights Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0a66c2;
+            --primary-dark: #004182;
+            --secondary: #057642;
+            --background: #f3f2ef;
+            --card-bg: #ffffff;
+            --text-primary: #191919;
+            --text-secondary: #666666;
+            --border: #e0e0e0;
+            --success: #057642;
+            --warning: #b24020;
+            --sidebar-width: 260px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border);
+            padding: 20px 0;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .logo {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        .logo h1 {
+            font-size: 18px;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo span {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: normal;
+        }
+
+        .nav-section {
+            padding: 0 12px;
+            margin-bottom: 20px;
+        }
+
+        .nav-section h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            padding: 0 8px;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .nav-item:hover {
+            background: var(--background);
+        }
+
+        .nav-item.active {
+            background: #e7f3ff;
+            color: var(--primary);
+            font-weight: 500;
+        }
+
+        .nav-item svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 24px;
+            min-height: 100vh;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .header h2 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Filters Bar */
+        .filters-bar {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .filter-group label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+            min-width: 150px;
+            background: white;
+        }
+
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--background);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .metric-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .metric-card .label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .metric-card .change {
+            font-size: 13px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .metric-card .change.positive {
+            color: var(--success);
+        }
+
+        .metric-card .change.negative {
+            color: var(--warning);
+        }
+
+        /* Charts */
+        .chart-container {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .chart-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+        }
+
+        .charts-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 1200px) {
+            .charts-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Posts Table */
+        .posts-table-container {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .posts-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .posts-table th {
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            background: var(--background);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .posts-table th:hover {
+            background: var(--border);
+        }
+
+        .posts-table th.sorted-asc::after {
+            content: ' ↑';
+        }
+
+        .posts-table th.sorted-desc::after {
+            content: ' ↓';
+        }
+
+        .posts-table td {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        .posts-table tr:hover {
+            background: #fafafa;
+        }
+
+        .post-content {
+            max-width: 400px;
+        }
+
+        .post-text {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.5;
+        }
+
+        .post-meta {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .hashtag {
+            background: #e7f3ff;
+            color: var(--primary);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .metric-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            background: var(--background);
+        }
+
+        .metric-badge.high {
+            background: #e6f4ea;
+            color: var(--success);
+        }
+
+        .metric-badge.low {
+            background: #fce8e6;
+            color: var(--warning);
+        }
+
+        /* Insights Section */
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .insight-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .insight-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .insight-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .insight-item:last-child {
+            border-bottom: none;
+        }
+
+        .insight-label {
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .insight-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--background);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
+        /* View Sections */
+        .view-section {
+            display: none;
+        }
+
+        .view-section.active {
+            display: block;
+        }
+
+        /* Post Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--card-bg);
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            font-size: 18px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .modal-body {
+            line-height: 1.6;
+        }
+
+        /* Heatmap */
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: auto repeat(24, 1fr);
+            gap: 2px;
+            font-size: 10px;
+        }
+
+        .heatmap-cell {
+            aspect-ratio: 1;
+            border-radius: 2px;
+            min-width: 14px;
+        }
+
+        .heatmap-label {
+            display: flex;
+            align-items: center;
+            padding-right: 8px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .heatmap-hour {
+            text-align: center;
+            font-size: 9px;
+            color: var(--text-secondary);
+        }
+
+        /* Top Posts Section */
+        .top-post-card {
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .top-post-rank {
+            width: 32px;
+            height: 32px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .top-post-content {
+            flex: 1;
+        }
+
+        .top-post-text {
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 8px;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .top-post-metrics {
+            display: flex;
+            gap: 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* AI Placeholder */
+        .ai-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 24px;
+            color: white;
+            margin-bottom: 24px;
+        }
+
+        .ai-section h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-section p {
+            opacity: 0.9;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .ai-section .btn {
+            background: white;
+            color: #667eea;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .filters-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-group select,
+            .filter-group input {
+                width: 100%;
+            }
+
+            .cards-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="logo">
+            <h1>
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>
+                </svg>
+                LinkedIn Insights
+            </h1>
+            <span>Page Analytics Dashboard</span>
+        </div>
+
+        <nav class="nav-section">
+            <h3>Analytics</h3>
+            <div class="nav-item active" data-view="overview">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/>
+                    <rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+                Overview
+            </div>
+            <div class="nav-item" data-view="posts">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                All Posts
+            </div>
+            <div class="nav-item" data-view="top-posts">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                Top Performers
+            </div>
+            <div class="nav-item" data-view="engagement">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+                Engagement
+            </div>
+        </nav>
+
+        <nav class="nav-section">
+            <h3>Insights</h3>
+            <div class="nav-item" data-view="timing">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Best Time to Post
+            </div>
+            <div class="nav-item" data-view="hashtags">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="4" y1="9" x2="20" y2="9"/>
+                    <line x1="4" y1="15" x2="20" y2="15"/>
+                    <line x1="10" y1="3" x2="8" y2="21"/>
+                    <line x1="16" y1="3" x2="14" y2="21"/>
+                </svg>
+                Hashtag Analysis
+            </div>
+            <div class="nav-item" data-view="content">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                Content Analysis
+            </div>
+        </nav>
+
+        <nav class="nav-section">
+            <h3>Coming Soon</h3>
+            <div class="nav-item" data-view="ai" style="opacity: 0.6;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/>
+                    <path d="M8.5 8.5v.01"/>
+                    <path d="M16 15.5v.01"/>
+                    <path d="M12 12v.01"/>
+                    <path d="M11 17v.01"/>
+                    <path d="M7 14v.01"/>
+                </svg>
+                AI Insights
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Filters Bar -->
+        <div class="filters-bar">
+            <div class="filter-group">
+                <label>Date Range</label>
+                <select id="dateRange">
+                    <option value="all">All Time</option>
+                    <option value="7">Last 7 Days</option>
+                    <option value="30" selected>Last 30 Days</option>
+                    <option value="90">Last 90 Days</option>
+                    <option value="custom">Custom Range</option>
+                </select>
+            </div>
+            <div class="filter-group" id="customDateRange" style="display: none;">
+                <label>From</label>
+                <input type="date" id="dateFrom">
+            </div>
+            <div class="filter-group" id="customDateRangeTo" style="display: none;">
+                <label>To</label>
+                <input type="date" id="dateTo">
+            </div>
+            <div class="filter-group">
+                <label>Content Type</label>
+                <select id="contentType">
+                    <option value="all">All Types</option>
+                    <option value="image">With Images</option>
+                    <option value="text">Text Only</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Hashtag</label>
+                <select id="hashtagFilter">
+                    <option value="all">All Hashtags</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Engagement</label>
+                <select id="engagementFilter">
+                    <option value="all">All Levels</option>
+                    <option value="high">High Performers</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low Performers</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="applyFilters()">Apply Filters</button>
+            <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
+        </div>
+
+        <!-- Overview Section -->
+        <section class="view-section active" id="view-overview">
+            <div class="header">
+                <h2>Overview Dashboard</h2>
+            </div>
+
+            <div class="cards-grid" id="overviewMetrics">
+                <!-- Metrics will be inserted here -->
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Engagement Over Time</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="engagementChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Metrics Distribution</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="metricsDistribution"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Posts by Day of Week</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="dayOfWeekChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Engagement by Day of Week</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="engagementByDayChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="insights-grid">
+                <div class="insight-card" id="quickInsights">
+                    <h3>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                        Quick Insights
+                    </h3>
+                    <div id="quickInsightsList">
+                        <!-- Insights will be inserted here -->
+                    </div>
+                </div>
+                <div class="insight-card" id="recommendations">
+                    <h3>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 18l6-6-6-6"/>
+                        </svg>
+                        Recommendations
+                    </h3>
+                    <div id="recommendationsList">
+                        <!-- Recommendations will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- All Posts Section -->
+        <section class="view-section" id="view-posts">
+            <div class="header">
+                <h2>All Posts</h2>
+                <div class="header-actions">
+                    <select id="sortBy" onchange="sortPosts()">
+                        <option value="date-desc">Newest First</option>
+                        <option value="date-asc">Oldest First</option>
+                        <option value="impressions-desc">Most Impressions</option>
+                        <option value="reactions-desc">Most Reactions</option>
+                        <option value="comments-desc">Most Comments</option>
+                        <option value="engagement-desc">Highest Engagement</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="posts-table-container">
+                <table class="posts-table">
+                    <thead>
+                        <tr>
+                            <th>Post Content</th>
+                            <th>Date</th>
+                            <th>Impressions</th>
+                            <th>Reactions</th>
+                            <th>Comments</th>
+                            <th>Shares</th>
+                            <th>Eng. Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="postsTableBody">
+                        <!-- Posts will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Top Performers Section -->
+        <section class="view-section" id="view-top-posts">
+            <div class="header">
+                <h2>Top Performing Posts</h2>
+            </div>
+
+            <div class="charts-row">
+                <div class="insight-card">
+                    <h3>Top by Impressions</h3>
+                    <div id="topByImpressions">
+                        <!-- Top posts will be inserted here -->
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <h3>Top by Reactions</h3>
+                    <div id="topByReactions">
+                        <!-- Top posts will be inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="charts-row">
+                <div class="insight-card">
+                    <h3>Top by Comments</h3>
+                    <div id="topByComments">
+                        <!-- Top posts will be inserted here -->
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <h3>Worst Performers</h3>
+                    <div id="worstPosts">
+                        <!-- Worst posts will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Engagement Section -->
+        <section class="view-section" id="view-engagement">
+            <div class="header">
+                <h2>Engagement Analysis</h2>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h3>Engagement Metrics Trend</h3>
+                </div>
+                <div class="chart-wrapper" style="height: 400px;">
+                    <canvas id="engagementTrendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Reactions vs Impressions</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="reactionsVsImpressions"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Engagement Distribution</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="engagementDistribution"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Timing Section -->
+        <section class="view-section" id="view-timing">
+            <div class="header">
+                <h2>Best Time to Post</h2>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h3>Engagement Heatmap by Day & Hour</h3>
+                </div>
+                <div id="heatmapContainer" style="overflow-x: auto; padding: 20px 0;">
+                    <!-- Heatmap will be inserted here -->
+                </div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Average Engagement by Hour</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="engagementByHour"></canvas>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <h3>Best Posting Times</h3>
+                    <div id="bestTimesInsight">
+                        <!-- Best times will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Hashtags Section -->
+        <section class="view-section" id="view-hashtags">
+            <div class="header">
+                <h2>Hashtag Performance</h2>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Top Hashtags by Usage</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="hashtagUsageChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Hashtag Performance (Avg. Impressions)</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="hashtagPerformanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="posts-table-container">
+                <div class="table-header">
+                    <h3>Hashtag Statistics</h3>
+                </div>
+                <table class="posts-table">
+                    <thead>
+                        <tr>
+                            <th>Hashtag</th>
+                            <th>Times Used</th>
+                            <th>Avg Impressions</th>
+                            <th>Avg Reactions</th>
+                            <th>Avg Engagement</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hashtagTableBody">
+                        <!-- Hashtag stats will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Content Analysis Section -->
+        <section class="view-section" id="view-content">
+            <div class="header">
+                <h2>Content Analysis</h2>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Post Length vs Engagement</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="lengthVsEngagement"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Content Type Performance</h3>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="contentTypeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="insights-grid">
+                <div class="insight-card">
+                    <h3>Content Insights</h3>
+                    <div id="contentInsights">
+                        <!-- Content insights will be inserted here -->
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <h3>Optimal Post Characteristics</h3>
+                    <div id="optimalCharacteristics">
+                        <!-- Optimal characteristics will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- AI Section -->
+        <section class="view-section" id="view-ai">
+            <div class="header">
+                <h2>AI-Powered Insights</h2>
+            </div>
+
+            <div class="ai-section">
+                <h3>
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/>
+                        <path d="M8.5 8.5v.01"/>
+                        <path d="M16 15.5v.01"/>
+                        <path d="M12 12v.01"/>
+                    </svg>
+                    Coming Soon
+                </h3>
+                <p>AI-powered analysis will help you understand your content performance, generate post suggestions, and provide personalized recommendations based on your audience behavior.</p>
+                <button class="btn" disabled>Notify Me</button>
+            </div>
+
+            <div class="insights-grid">
+                <div class="insight-card" style="opacity: 0.5;">
+                    <h3>AI Content Suggestions</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px;">Get AI-generated post ideas based on your top performing content.</p>
+                </div>
+                <div class="insight-card" style="opacity: 0.5;">
+                    <h3>Sentiment Analysis</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px;">Understand the emotional tone of your posts and how it affects engagement.</p>
+                </div>
+                <div class="insight-card" style="opacity: 0.5;">
+                    <h3>Competitor Insights</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px;">Compare your performance with industry benchmarks.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Post Modal -->
+    <div class="modal-overlay" id="postModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Post Details</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Post details will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let allPosts = [];
+        let filteredPosts = [];
+        let charts = {};
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadData();
+            setupNavigation();
+            setupFilters();
+        });
+
+        // Load data from JSON file
+        async function loadData() {
+            try {
+                const response = await fetch('fleetzz_data.json');
+                const data = await response.json();
+                allPosts = data.data.posts.edges.map(edge => edge.node);
+                filteredPosts = [...allPosts];
+
+                populateHashtagFilter();
+                renderAll();
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        // Setup navigation
+        function setupNavigation() {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const view = item.dataset.view;
+
+                    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+
+                    document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+                    document.getElementById(`view-${view}`).classList.add('active');
+                });
+            });
+        }
+
+        // Setup filters
+        function setupFilters() {
+            document.getElementById('dateRange').addEventListener('change', (e) => {
+                const customFields = document.querySelectorAll('#customDateRange, #customDateRangeTo');
+                customFields.forEach(f => f.style.display = e.target.value === 'custom' ? 'flex' : 'none');
+            });
+        }
+
+        // Populate hashtag filter
+        function populateHashtagFilter() {
+            const hashtags = new Set();
+            allPosts.forEach(post => {
+                const annotations = post.metadata?.annotations || [];
+                annotations.forEach(a => {
+                    if (a.type === 'hashtag') {
+                        hashtags.add(a.content);
+                    }
+                });
+            });
+
+            const select = document.getElementById('hashtagFilter');
+            [...hashtags].sort().forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag;
+                option.textContent = tag;
+                select.appendChild(option);
+            });
+        }
+
+        // Apply filters
+        function applyFilters() {
+            const dateRange = document.getElementById('dateRange').value;
+            const contentType = document.getElementById('contentType').value;
+            const hashtag = document.getElementById('hashtagFilter').value;
+            const engagement = document.getElementById('engagementFilter').value;
+
+            filteredPosts = allPosts.filter(post => {
+                // Date filter
+                if (dateRange !== 'all' && dateRange !== 'custom') {
+                    const days = parseInt(dateRange);
+                    const postDate = new Date(post.sentAt);
+                    const cutoff = new Date();
+                    cutoff.setDate(cutoff.getDate() - days);
+                    if (postDate < cutoff) return false;
+                }
+
+                if (dateRange === 'custom') {
+                    const from = document.getElementById('dateFrom').value;
+                    const to = document.getElementById('dateTo').value;
+                    const postDate = new Date(post.sentAt);
+                    if (from && postDate < new Date(from)) return false;
+                    if (to && postDate > new Date(to)) return false;
+                }
+
+                // Content type filter
+                if (contentType !== 'all') {
+                    const hasImages = post.assets && post.assets.length > 0;
+                    if (contentType === 'image' && !hasImages) return false;
+                    if (contentType === 'text' && hasImages) return false;
+                }
+
+                // Hashtag filter
+                if (hashtag !== 'all') {
+                    const postHashtags = (post.metadata?.annotations || [])
+                        .filter(a => a.type === 'hashtag')
+                        .map(a => a.content);
+                    if (!postHashtags.includes(hashtag)) return false;
+                }
+
+                // Engagement filter
+                if (engagement !== 'all') {
+                    const impressions = getMetric(post, 'impressions');
+                    const avgImpressions = calculateAvgImpressions();
+                    if (engagement === 'high' && impressions < avgImpressions * 1.5) return false;
+                    if (engagement === 'medium' && (impressions < avgImpressions * 0.5 || impressions > avgImpressions * 1.5)) return false;
+                    if (engagement === 'low' && impressions > avgImpressions * 0.5) return false;
+                }
+
+                return true;
+            });
+
+            renderAll();
+        }
+
+        // Reset filters
+        function resetFilters() {
+            document.getElementById('dateRange').value = '30';
+            document.getElementById('contentType').value = 'all';
+            document.getElementById('hashtagFilter').value = 'all';
+            document.getElementById('engagementFilter').value = 'all';
+            document.querySelectorAll('#customDateRange, #customDateRangeTo').forEach(f => f.style.display = 'none');
+
+            filteredPosts = [...allPosts];
+            renderAll();
+        }
+
+        // Helper: Get metric value
+        function getMetric(post, type) {
+            const metric = post.metrics?.find(m => m.type === type);
+            return metric?.value || 0;
+        }
+
+        // Helper: Calculate average impressions
+        function calculateAvgImpressions() {
+            if (allPosts.length === 0) return 0;
+            const total = allPosts.reduce((sum, post) => sum + getMetric(post, 'impressions'), 0);
+            return total / allPosts.length;
+        }
+
+        // Render all views
+        function renderAll() {
+            renderOverview();
+            renderPostsTable();
+            renderTopPosts();
+            renderEngagement();
+            renderTiming();
+            renderHashtags();
+            renderContent();
+        }
+
+        // Render Overview
+        function renderOverview() {
+            const totalPosts = filteredPosts.length;
+            const totalImpressions = filteredPosts.reduce((sum, p) => sum + getMetric(p, 'impressions'), 0);
+            const totalReactions = filteredPosts.reduce((sum, p) => sum + getMetric(p, 'reactions'), 0);
+            const totalComments = filteredPosts.reduce((sum, p) => sum + getMetric(p, 'comments'), 0);
+            const totalShares = filteredPosts.reduce((sum, p) => sum + getMetric(p, 'shares'), 0);
+            const avgEngagement = totalPosts > 0 ? ((totalReactions + totalComments + totalShares) / totalImpressions * 100).toFixed(2) : 0;
+
+            document.getElementById('overviewMetrics').innerHTML = `
+                <div class="metric-card">
+                    <div class="label">Total Posts</div>
+                    <div class="value">${totalPosts}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Total Impressions</div>
+                    <div class="value">${totalImpressions.toLocaleString()}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Total Reactions</div>
+                    <div class="value">${totalReactions.toLocaleString()}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Total Comments</div>
+                    <div class="value">${totalComments.toLocaleString()}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Total Shares</div>
+                    <div class="value">${totalShares.toLocaleString()}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Avg Engagement Rate</div>
+                    <div class="value">${avgEngagement}%</div>
+                </div>
+            `;
+
+            // Engagement over time chart
+            renderEngagementOverTimeChart();
+            renderMetricsDistributionChart();
+            renderDayOfWeekChart();
+            renderEngagementByDayChart();
+            renderQuickInsights();
+        }
+
+        // Engagement over time chart
+        function renderEngagementOverTimeChart() {
+            const ctx = document.getElementById('engagementChart').getContext('2d');
+
+            if (charts.engagement) charts.engagement.destroy();
+
+            const sortedPosts = [...filteredPosts].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt));
+
+            const data = sortedPosts.map(post => ({
+                x: new Date(post.sentAt),
+                y: getMetric(post, 'impressions')
+            }));
+
+            charts.engagement = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Impressions',
+                        data: data,
+                        borderColor: '#0a66c2',
+                        backgroundColor: 'rgba(10, 102, 194, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Metrics distribution chart
+        function renderMetricsDistributionChart() {
+            const ctx = document.getElementById('metricsDistribution').getContext('2d');
+
+            if (charts.distribution) charts.distribution.destroy();
+
+            const totalReactions = filteredPosts.reduce((sum, p) => sum + getMetric(p, 'reactions'), 0);
+            const totalComments = filteredPosts.reduce((sum, p) => sum + getMetric(p, 'comments'), 0);
+            const totalShares = filteredPosts.reduce((sum, p) => sum + getMetric(p, 'shares'), 0);
+
+            charts.distribution = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Reactions', 'Comments', 'Shares'],
+                    datasets: [{
+                        data: [totalReactions, totalComments, totalShares],
+                        backgroundColor: ['#0a66c2', '#057642', '#b24020']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // Day of week chart
+        function renderDayOfWeekChart() {
+            const ctx = document.getElementById('dayOfWeekChart').getContext('2d');
+
+            if (charts.dayOfWeek) charts.dayOfWeek.destroy();
+
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const postsByDay = new Array(7).fill(0);
+
+            filteredPosts.forEach(post => {
+                const day = new Date(post.sentAt).getDay();
+                postsByDay[day]++;
+            });
+
+            charts.dayOfWeek = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: days,
+                    datasets: [{
+                        label: 'Posts',
+                        data: postsByDay,
+                        backgroundColor: '#0a66c2'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Engagement by day chart
+        function renderEngagementByDayChart() {
+            const ctx = document.getElementById('engagementByDayChart').getContext('2d');
+
+            if (charts.engagementByDay) charts.engagementByDay.destroy();
+
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const engagementByDay = new Array(7).fill(0);
+            const countByDay = new Array(7).fill(0);
+
+            filteredPosts.forEach(post => {
+                const day = new Date(post.sentAt).getDay();
+                engagementByDay[day] += getMetric(post, 'impressions');
+                countByDay[day]++;
+            });
+
+            const avgByDay = engagementByDay.map((total, i) => countByDay[i] > 0 ? total / countByDay[i] : 0);
+
+            charts.engagementByDay = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: days,
+                    datasets: [{
+                        label: 'Avg Impressions',
+                        data: avgByDay,
+                        backgroundColor: '#057642'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Quick insights
+        function renderQuickInsights() {
+            const avgImpressions = filteredPosts.length > 0
+                ? (filteredPosts.reduce((sum, p) => sum + getMetric(p, 'impressions'), 0) / filteredPosts.length).toFixed(0)
+                : 0;
+
+            const avgReactions = filteredPosts.length > 0
+                ? (filteredPosts.reduce((sum, p) => sum + getMetric(p, 'reactions'), 0) / filteredPosts.length).toFixed(1)
+                : 0;
+
+            const withImages = filteredPosts.filter(p => p.assets && p.assets.length > 0).length;
+            const imageRatio = filteredPosts.length > 0 ? ((withImages / filteredPosts.length) * 100).toFixed(0) : 0;
+
+            const avgLength = filteredPosts.length > 0
+                ? (filteredPosts.reduce((sum, p) => sum + (p.text?.length || 0), 0) / filteredPosts.length).toFixed(0)
+                : 0;
+
+            document.getElementById('quickInsightsList').innerHTML = `
+                <div class="insight-item">
+                    <span class="insight-label">Avg Impressions per Post</span>
+                    <span class="insight-value">${parseInt(avgImpressions).toLocaleString()}</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Avg Reactions per Post</span>
+                    <span class="insight-value">${avgReactions}</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Posts with Images</span>
+                    <span class="insight-value">${imageRatio}%</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Avg Post Length</span>
+                    <span class="insight-value">${avgLength} chars</span>
+                </div>
+            `;
+
+            // Generate recommendations
+            generateRecommendations();
+        }
+
+        // Generate recommendations
+        function generateRecommendations() {
+            const recommendations = [];
+
+            // Analyze best day
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const engagementByDay = new Array(7).fill(0);
+            const countByDay = new Array(7).fill(0);
+
+            filteredPosts.forEach(post => {
+                const day = new Date(post.sentAt).getDay();
+                engagementByDay[day] += getMetric(post, 'impressions');
+                countByDay[day]++;
+            });
+
+            const avgByDay = engagementByDay.map((total, i) => countByDay[i] > 0 ? total / countByDay[i] : 0);
+            const bestDay = avgByDay.indexOf(Math.max(...avgByDay));
+
+            if (avgByDay[bestDay] > 0) {
+                recommendations.push(`Post more on ${days[bestDay]} - it's your best performing day`);
+            }
+
+            // Analyze content with images
+            const withImages = filteredPosts.filter(p => p.assets && p.assets.length > 0);
+            const withoutImages = filteredPosts.filter(p => !p.assets || p.assets.length === 0);
+
+            const avgWithImages = withImages.length > 0
+                ? withImages.reduce((sum, p) => sum + getMetric(p, 'impressions'), 0) / withImages.length
+                : 0;
+            const avgWithoutImages = withoutImages.length > 0
+                ? withoutImages.reduce((sum, p) => sum + getMetric(p, 'impressions'), 0) / withoutImages.length
+                : 0;
+
+            if (avgWithImages > avgWithoutImages * 1.2) {
+                recommendations.push('Posts with images perform better - use more visuals');
+            } else if (avgWithoutImages > avgWithImages * 1.2) {
+                recommendations.push('Text-only posts are performing well - keep the quality content');
+            }
+
+            // Analyze hashtags
+            const hashtagPerformance = analyzeHashtagPerformance();
+            const topHashtag = hashtagPerformance.sort((a, b) => b.avgImpressions - a.avgImpressions)[0];
+            if (topHashtag && topHashtag.avgImpressions > 0) {
+                recommendations.push(`${topHashtag.hashtag} is your best performing hashtag`);
+            }
+
+            // Post frequency
+            if (filteredPosts.length < 10) {
+                recommendations.push('Increase posting frequency for better visibility');
+            }
+
+            document.getElementById('recommendationsList').innerHTML = recommendations.map(r => `
+                <div class="insight-item">
+                    <span class="insight-label">${r}</span>
+                </div>
+            `).join('') || '<div class="insight-item"><span class="insight-label">Not enough data for recommendations</span></div>';
+        }
+
+        // Render Posts Table
+        function renderPostsTable() {
+            const tbody = document.getElementById('postsTableBody');
+
+            const sortedPosts = sortPosts(false);
+
+            tbody.innerHTML = sortedPosts.map(post => {
+                const hashtags = (post.metadata?.annotations || [])
+                    .filter(a => a.type === 'hashtag')
+                    .map(a => a.content)
+                    .slice(0, 3);
+
+                const date = new Date(post.sentAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+
+                return `
+                    <tr onclick="showPostModal('${post.id}')">
+                        <td class="post-content">
+                            <div class="post-text">${escapeHtml(post.text || '')}</div>
+                            <div class="post-meta">
+                                ${hashtags.map(h => `<span class="hashtag">${h}</span>`).join('')}
+                            </div>
+                        </td>
+                        <td>${date}</td>
+                        <td><span class="metric-badge">${getMetric(post, 'impressions').toLocaleString()}</span></td>
+                        <td><span class="metric-badge">${getMetric(post, 'reactions')}</span></td>
+                        <td><span class="metric-badge">${getMetric(post, 'comments')}</span></td>
+                        <td><span class="metric-badge">${getMetric(post, 'shares')}</span></td>
+                        <td><span class="metric-badge">${(getMetric(post, 'engagementRate') * 100).toFixed(2)}%</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Sort posts
+        function sortPosts(render = true) {
+            const sortBy = document.getElementById('sortBy').value;
+
+            const sorted = [...filteredPosts].sort((a, b) => {
+                switch (sortBy) {
+                    case 'date-desc':
+                        return new Date(b.sentAt) - new Date(a.sentAt);
+                    case 'date-asc':
+                        return new Date(a.sentAt) - new Date(b.sentAt);
+                    case 'impressions-desc':
+                        return getMetric(b, 'impressions') - getMetric(a, 'impressions');
+                    case 'reactions-desc':
+                        return getMetric(b, 'reactions') - getMetric(a, 'reactions');
+                    case 'comments-desc':
+                        return getMetric(b, 'comments') - getMetric(a, 'comments');
+                    case 'engagement-desc':
+                        return getMetric(b, 'engagementRate') - getMetric(a, 'engagementRate');
+                    default:
+                        return 0;
+                }
+            });
+
+            if (render) {
+                renderPostsTable();
+            }
+
+            return sorted;
+        }
+
+        // Render Top Posts
+        function renderTopPosts() {
+            const renderTopList = (containerId, posts, metric) => {
+                document.getElementById(containerId).innerHTML = posts.slice(0, 5).map((post, i) => `
+                    <div class="top-post-card" onclick="showPostModal('${post.id}')">
+                        <div class="top-post-rank">${i + 1}</div>
+                        <div class="top-post-content">
+                            <div class="top-post-text">${escapeHtml(post.text || '')}</div>
+                            <div class="top-post-metrics">
+                                <span>${getMetric(post, 'impressions').toLocaleString()} impressions</span>
+                                <span>${getMetric(post, 'reactions')} reactions</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary);">No posts available</p>';
+            };
+
+            const byImpressions = [...filteredPosts].sort((a, b) => getMetric(b, 'impressions') - getMetric(a, 'impressions'));
+            const byReactions = [...filteredPosts].sort((a, b) => getMetric(b, 'reactions') - getMetric(a, 'reactions'));
+            const byComments = [...filteredPosts].sort((a, b) => getMetric(b, 'comments') - getMetric(a, 'comments'));
+            const worst = [...filteredPosts].sort((a, b) => getMetric(a, 'impressions') - getMetric(b, 'impressions'));
+
+            renderTopList('topByImpressions', byImpressions, 'impressions');
+            renderTopList('topByReactions', byReactions, 'reactions');
+            renderTopList('topByComments', byComments, 'comments');
+            renderTopList('worstPosts', worst, 'impressions');
+        }
+
+        // Render Engagement
+        function renderEngagement() {
+            // Engagement trend chart
+            const ctx1 = document.getElementById('engagementTrendChart').getContext('2d');
+            if (charts.engagementTrend) charts.engagementTrend.destroy();
+
+            const sortedPosts = [...filteredPosts].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt));
+
+            charts.engagementTrend = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Impressions',
+                            data: sortedPosts.map(p => ({ x: new Date(p.sentAt), y: getMetric(p, 'impressions') })),
+                            borderColor: '#0a66c2',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Reactions',
+                            data: sortedPosts.map(p => ({ x: new Date(p.sentAt), y: getMetric(p, 'reactions') })),
+                            borderColor: '#057642',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Comments',
+                            data: sortedPosts.map(p => ({ x: new Date(p.sentAt), y: getMetric(p, 'comments') })),
+                            borderColor: '#b24020',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { unit: 'day' }
+                        },
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Reactions vs Impressions scatter
+            const ctx2 = document.getElementById('reactionsVsImpressions').getContext('2d');
+            if (charts.scatter) charts.scatter.destroy();
+
+            charts.scatter = new Chart(ctx2, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Posts',
+                        data: filteredPosts.map(p => ({
+                            x: getMetric(p, 'impressions'),
+                            y: getMetric(p, 'reactions')
+                        })),
+                        backgroundColor: '#0a66c2'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Impressions' } },
+                        y: { title: { display: true, text: 'Reactions' } }
+                    }
+                }
+            });
+
+            // Engagement distribution
+            const ctx3 = document.getElementById('engagementDistribution').getContext('2d');
+            if (charts.engDist) charts.engDist.destroy();
+
+            const impressions = filteredPosts.map(p => getMetric(p, 'impressions'));
+            const avgImp = impressions.reduce((a, b) => a + b, 0) / impressions.length || 0;
+
+            const high = impressions.filter(i => i > avgImp * 1.5).length;
+            const medium = impressions.filter(i => i >= avgImp * 0.5 && i <= avgImp * 1.5).length;
+            const low = impressions.filter(i => i < avgImp * 0.5).length;
+
+            charts.engDist = new Chart(ctx3, {
+                type: 'pie',
+                data: {
+                    labels: ['High Performers', 'Medium', 'Low Performers'],
+                    datasets: [{
+                        data: [high, medium, low],
+                        backgroundColor: ['#057642', '#0a66c2', '#b24020']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // Render Timing
+        function renderTiming() {
+            // Heatmap
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const heatmapData = Array(7).fill(null).map(() => Array(24).fill({ count: 0, engagement: 0 }));
+
+            filteredPosts.forEach(post => {
+                const date = new Date(post.sentAt);
+                const day = date.getDay();
+                const hour = date.getHours();
+                const current = heatmapData[day][hour];
+                heatmapData[day][hour] = {
+                    count: (current.count || 0) + 1,
+                    engagement: (current.engagement || 0) + getMetric(post, 'impressions')
+                };
+            });
+
+            // Find max for color scaling
+            let maxEngagement = 0;
+            heatmapData.forEach(row => row.forEach(cell => {
+                if (cell.engagement > maxEngagement) maxEngagement = cell.engagement;
+            }));
+
+            let heatmapHtml = '<div class="heatmap-grid">';
+
+            // Header row
+            heatmapHtml += '<div></div>';
+            for (let h = 0; h < 24; h++) {
+                heatmapHtml += `<div class="heatmap-hour">${h}</div>`;
+            }
+
+            // Data rows
+            days.forEach((day, dayIndex) => {
+                heatmapHtml += `<div class="heatmap-label">${day}</div>`;
+                for (let h = 0; h < 24; h++) {
+                    const cell = heatmapData[dayIndex][h];
+                    const intensity = maxEngagement > 0 ? cell.engagement / maxEngagement : 0;
+                    const color = `rgba(10, 102, 194, ${intensity})`;
+                    const title = `${day} ${h}:00 - ${cell.count} posts, ${cell.engagement} impressions`;
+                    heatmapHtml += `<div class="heatmap-cell" style="background: ${color}" title="${title}"></div>`;
+                }
+            });
+
+            heatmapHtml += '</div>';
+            document.getElementById('heatmapContainer').innerHTML = heatmapHtml;
+
+            // Engagement by hour chart
+            const ctx = document.getElementById('engagementByHour').getContext('2d');
+            if (charts.byHour) charts.byHour.destroy();
+
+            const hourlyEngagement = Array(24).fill(0);
+            const hourlyCount = Array(24).fill(0);
+
+            filteredPosts.forEach(post => {
+                const hour = new Date(post.sentAt).getHours();
+                hourlyEngagement[hour] += getMetric(post, 'impressions');
+                hourlyCount[hour]++;
+            });
+
+            const avgByHour = hourlyEngagement.map((total, i) => hourlyCount[i] > 0 ? total / hourlyCount[i] : 0);
+
+            charts.byHour = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
+                    datasets: [{
+                        label: 'Avg Impressions',
+                        data: avgByHour,
+                        backgroundColor: '#0a66c2'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Best times insight
+            const bestHours = avgByHour
+                .map((avg, hour) => ({ hour, avg }))
+                .filter(h => h.avg > 0)
+                .sort((a, b) => b.avg - a.avg)
+                .slice(0, 5);
+
+            document.getElementById('bestTimesInsight').innerHTML = bestHours.map(h => `
+                <div class="insight-item">
+                    <span class="insight-label">${h.hour}:00 - ${h.hour + 1}:00</span>
+                    <span class="insight-value">${h.avg.toFixed(0)} avg impressions</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">Not enough data</p>';
+        }
+
+        // Analyze hashtag performance
+        function analyzeHashtagPerformance() {
+            const hashtagStats = {};
+
+            filteredPosts.forEach(post => {
+                const hashtags = (post.metadata?.annotations || [])
+                    .filter(a => a.type === 'hashtag')
+                    .map(a => a.content);
+
+                hashtags.forEach(tag => {
+                    if (!hashtagStats[tag]) {
+                        hashtagStats[tag] = { count: 0, impressions: 0, reactions: 0, engagement: 0 };
+                    }
+                    hashtagStats[tag].count++;
+                    hashtagStats[tag].impressions += getMetric(post, 'impressions');
+                    hashtagStats[tag].reactions += getMetric(post, 'reactions');
+                    hashtagStats[tag].engagement += getMetric(post, 'engagementRate');
+                });
+            });
+
+            return Object.entries(hashtagStats).map(([hashtag, stats]) => ({
+                hashtag,
+                count: stats.count,
+                avgImpressions: stats.impressions / stats.count,
+                avgReactions: stats.reactions / stats.count,
+                avgEngagement: stats.engagement / stats.count
+            }));
+        }
+
+        // Render Hashtags
+        function renderHashtags() {
+            const hashtagStats = analyzeHashtagPerformance();
+
+            // Usage chart
+            const ctx1 = document.getElementById('hashtagUsageChart').getContext('2d');
+            if (charts.hashtagUsage) charts.hashtagUsage.destroy();
+
+            const sortedByUsage = [...hashtagStats].sort((a, b) => b.count - a.count).slice(0, 10);
+
+            charts.hashtagUsage = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: sortedByUsage.map(h => h.hashtag),
+                    datasets: [{
+                        label: 'Times Used',
+                        data: sortedByUsage.map(h => h.count),
+                        backgroundColor: '#0a66c2'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Performance chart
+            const ctx2 = document.getElementById('hashtagPerformanceChart').getContext('2d');
+            if (charts.hashtagPerf) charts.hashtagPerf.destroy();
+
+            const sortedByPerf = [...hashtagStats].sort((a, b) => b.avgImpressions - a.avgImpressions).slice(0, 10);
+
+            charts.hashtagPerf = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: sortedByPerf.map(h => h.hashtag),
+                    datasets: [{
+                        label: 'Avg Impressions',
+                        data: sortedByPerf.map(h => h.avgImpressions),
+                        backgroundColor: '#057642'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Table
+            document.getElementById('hashtagTableBody').innerHTML = hashtagStats
+                .sort((a, b) => b.count - a.count)
+                .map(h => `
+                    <tr>
+                        <td><span class="hashtag">${h.hashtag}</span></td>
+                        <td>${h.count}</td>
+                        <td>${h.avgImpressions.toFixed(0)}</td>
+                        <td>${h.avgReactions.toFixed(1)}</td>
+                        <td>${(h.avgEngagement * 100).toFixed(2)}%</td>
+                    </tr>
+                `).join('');
+        }
+
+        // Render Content Analysis
+        function renderContent() {
+            // Post length vs engagement
+            const ctx1 = document.getElementById('lengthVsEngagement').getContext('2d');
+            if (charts.lengthVsEng) charts.lengthVsEng.destroy();
+
+            charts.lengthVsEng = new Chart(ctx1, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Posts',
+                        data: filteredPosts.map(p => ({
+                            x: p.text?.length || 0,
+                            y: getMetric(p, 'impressions')
+                        })),
+                        backgroundColor: '#0a66c2'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Post Length (characters)' } },
+                        y: { title: { display: true, text: 'Impressions' } }
+                    }
+                }
+            });
+
+            // Content type performance
+            const ctx2 = document.getElementById('contentTypeChart').getContext('2d');
+            if (charts.contentType) charts.contentType.destroy();
+
+            const withImages = filteredPosts.filter(p => p.assets && p.assets.length > 0);
+            const withoutImages = filteredPosts.filter(p => !p.assets || p.assets.length === 0);
+
+            const avgWithImages = withImages.length > 0
+                ? withImages.reduce((sum, p) => sum + getMetric(p, 'impressions'), 0) / withImages.length
+                : 0;
+            const avgWithoutImages = withoutImages.length > 0
+                ? withoutImages.reduce((sum, p) => sum + getMetric(p, 'impressions'), 0) / withoutImages.length
+                : 0;
+
+            charts.contentType = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: ['With Images', 'Text Only'],
+                    datasets: [{
+                        label: 'Avg Impressions',
+                        data: [avgWithImages, avgWithoutImages],
+                        backgroundColor: ['#0a66c2', '#057642']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Content insights
+            const lengths = filteredPosts.map(p => p.text?.length || 0);
+            const avgLength = lengths.reduce((a, b) => a + b, 0) / lengths.length || 0;
+
+            // Find optimal length range
+            const lengthBuckets = {
+                short: { posts: [], label: '< 200 chars' },
+                medium: { posts: [], label: '200-500 chars' },
+                long: { posts: [], label: '> 500 chars' }
+            };
+
+            filteredPosts.forEach(p => {
+                const len = p.text?.length || 0;
+                if (len < 200) lengthBuckets.short.posts.push(p);
+                else if (len <= 500) lengthBuckets.medium.posts.push(p);
+                else lengthBuckets.long.posts.push(p);
+            });
+
+            const bucketAvgs = Object.entries(lengthBuckets).map(([key, bucket]) => ({
+                key,
+                label: bucket.label,
+                avg: bucket.posts.length > 0
+                    ? bucket.posts.reduce((sum, p) => sum + getMetric(p, 'impressions'), 0) / bucket.posts.length
+                    : 0,
+                count: bucket.posts.length
+            }));
+
+            const bestLength = bucketAvgs.sort((a, b) => b.avg - a.avg)[0];
+
+            document.getElementById('contentInsights').innerHTML = `
+                <div class="insight-item">
+                    <span class="insight-label">Average Post Length</span>
+                    <span class="insight-value">${avgLength.toFixed(0)} chars</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Posts with Images</span>
+                    <span class="insight-value">${withImages.length} (${((withImages.length/filteredPosts.length)*100).toFixed(0)}%)</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Text-only Posts</span>
+                    <span class="insight-value">${withoutImages.length} (${((withoutImages.length/filteredPosts.length)*100).toFixed(0)}%)</span>
+                </div>
+            `;
+
+            document.getElementById('optimalCharacteristics').innerHTML = `
+                <div class="insight-item">
+                    <span class="insight-label">Best Post Length</span>
+                    <span class="insight-value">${bestLength.label}</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Best Content Type</span>
+                    <span class="insight-value">${avgWithImages > avgWithoutImages ? 'With Images' : 'Text Only'}</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Avg impressions (${bestLength.label})</span>
+                    <span class="insight-value">${bestLength.avg.toFixed(0)}</span>
+                </div>
+            `;
+        }
+
+        // Show post modal
+        function showPostModal(postId) {
+            const post = filteredPosts.find(p => p.id === postId);
+            if (!post) return;
+
+            const date = new Date(post.sentAt).toLocaleString();
+            const hashtags = (post.metadata?.annotations || [])
+                .filter(a => a.type === 'hashtag')
+                .map(a => a.content);
+
+            document.getElementById('modalBody').innerHTML = `
+                <div style="margin-bottom: 16px;">
+                    <strong>Posted:</strong> ${date}
+                </div>
+                <div style="margin-bottom: 16px; line-height: 1.6;">
+                    ${escapeHtml(post.text || '')}
+                </div>
+                ${hashtags.length > 0 ? `
+                    <div style="margin-bottom: 16px;">
+                        ${hashtags.map(h => `<span class="hashtag">${h}</span>`).join(' ')}
+                    </div>
+                ` : ''}
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+                    <div style="text-align: center; padding: 12px; background: var(--background); border-radius: 8px;">
+                        <div style="font-size: 20px; font-weight: 600;">${getMetric(post, 'impressions').toLocaleString()}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">Impressions</div>
+                    </div>
+                    <div style="text-align: center; padding: 12px; background: var(--background); border-radius: 8px;">
+                        <div style="font-size: 20px; font-weight: 600;">${getMetric(post, 'reactions')}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">Reactions</div>
+                    </div>
+                    <div style="text-align: center; padding: 12px; background: var(--background); border-radius: 8px;">
+                        <div style="font-size: 20px; font-weight: 600;">${getMetric(post, 'comments')}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">Comments</div>
+                    </div>
+                    <div style="text-align: center; padding: 12px; background: var(--background); border-radius: 8px;">
+                        <div style="font-size: 20px; font-weight: 600;">${getMetric(post, 'shares')}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">Shares</div>
+                    </div>
+                </div>
+                ${post.externalLink ? `
+                    <a href="${post.externalLink}" target="_blank" class="btn btn-primary" style="text-decoration: none;">
+                        View on LinkedIn
+                    </a>
+                ` : ''}
+            `;
+
+            document.getElementById('postModal').classList.add('active');
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('postModal').classList.remove('active');
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Close modal on outside click
+        document.getElementById('postModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('postModal')) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>
