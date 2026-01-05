@@ -5,8 +5,9 @@ import { cookies } from "next/headers";
 export async function GET() {
   const clientId = process.env.LINKEDIN_CLIENT_ID!;
   const redirectUri = `${process.env.NEXTAUTH_URL}/api/auth/callback/linkedin`;
-  // Include organization scopes for page access
-  const scope = "openid profile email w_member_social r_organization_social w_organization_social r_basicprofile";
+  // Base scopes - additional scopes require Community Management API product
+  // r_organization_social, w_organization_social require Community Management API
+  const scope = "openid profile email w_member_social";
 
   // Generate state for CSRF protection
   const state = crypto.randomUUID();

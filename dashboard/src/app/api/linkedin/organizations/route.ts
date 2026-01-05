@@ -3,44 +3,41 @@ import { getSession } from "@/lib/session";
 
 const LINKEDIN_API_BASE = "https://api.linkedin.com";
 
-export interface LinkedInOrganization {
-  id: string;
-  localizedName: string;
-  vanityName?: string;
-  logoV2?: {
-    original?: string;
-    "cropped~"?: {
-      elements?: Array<{
-        identifiers?: Array<{
-          identifier?: string;
-        }>;
-      }>;
-    };
-  };
-}
-
 export interface OrganizationAcl {
-  organization: string; // URN format: urn:li:organization:123
+  organization: string;
   role: string;
   state: string;
 }
 
-async function fetchWithAuth(url: string, accessToken: string) {
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "X-Restli-Protocol-Version": "2.0.0",
-      "LinkedIn-Version": "202401",
-    },
-  });
+interface FetchResult<T> {
+  data: T | null;
+  error: string | null;
+  status: number;
+  permissionError?: boolean;
+}
 
-  if (!response.ok) {
-    const error = await response.text();
-    console.error(`LinkedIn API Error: ${response.status} - ${error}`);
-    throw new Error(`LinkedIn API Error: ${response.status}`);
+async function fetchWithAuth<T>(url: string, accessToken: string): Promise<FetchResult<T>> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "X-Restli-Protocol-Version": "2.0.0",
+        "LinkedIn-Version": "202401",
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      const isPermissionError = response.status === 403 || error.includes("ACCESS_DENIED");
+      console.error(`LinkedIn API Error: ${response.status} - ${error}`);
+      return { data: null, error, status: response.status, permissionError: isPermissionError };
+    }
+
+    const data = await response.json();
+    return { data, error: null, status: response.status };
+  } catch (err) {
+    return { data: null, error: String(err), status: 500 };
   }
-
-  return response.json();
 }
 
 export async function GET() {
@@ -53,8 +50,6 @@ export async function GET() {
 
     const { accessToken, user } = session;
 
-    // Fetch organizations where user has admin or content poster role
-    // Using organizationAcls endpoint with roleAssignee finder
     let organizations: Array<{
       id: string;
       urn: string;
@@ -65,102 +60,60 @@ export async function GET() {
       type: "organization";
     }> = [];
 
-    try {
-      // Get all organization ACLs for the current user
-      const aclsResponse = await fetchWithAuth(
-        `${LINKEDIN_API_BASE}/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED`,
-        accessToken
-      );
+    let hasOrgPermission = true;
+    let orgPermissionError: string | null = null;
 
-      console.log("[Organizations] ACLs response:", JSON.stringify(aclsResponse, null, 2));
+    // Try to fetch organizations where user has admin role
+    const aclsResult = await fetchWithAuth<{ elements: OrganizationAcl[] }>(
+      `${LINKEDIN_API_BASE}/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED`,
+      accessToken
+    );
 
-      const acls: OrganizationAcl[] = aclsResponse.elements || [];
+    if (aclsResult.permissionError) {
+      hasOrgPermission = false;
+      orgPermissionError = "Your LinkedIn app doesn't have permission to access organization data. You need the 'Community Management API' product.";
+      console.log("[Organizations] No permission for organizationAcls API");
+    } else if (aclsResult.data?.elements) {
+      const acls = aclsResult.data.elements;
+      console.log(`[Organizations] Found ${acls.length} admin organizations`);
 
-      // Fetch details for each organization
       for (const acl of acls) {
-        try {
-          // Extract organization ID from URN (urn:li:organization:123 -> 123)
-          const orgId = acl.organization.split(":").pop();
-
-          if (orgId) {
-            // Fetch organization details
-            const orgDetails = await fetchWithAuth(
-              `${LINKEDIN_API_BASE}/v2/organizations/${orgId}`,
-              accessToken
-            );
-
-            console.log("[Organizations] Org details:", JSON.stringify(orgDetails, null, 2));
-
-            // Extract logo URL if available
-            let logoUrl: string | undefined;
-            if (orgDetails.logoV2?.["cropped~"]?.elements?.[0]?.identifiers?.[0]?.identifier) {
-              logoUrl = orgDetails.logoV2["cropped~"].elements[0].identifiers[0].identifier;
-            } else if (orgDetails.logoV2?.original) {
-              logoUrl = orgDetails.logoV2.original;
-            }
-
-            organizations.push({
-              id: orgId,
-              urn: acl.organization,
-              name: orgDetails.localizedName || orgDetails.name?.localized?.en_US || `Organization ${orgId}`,
-              vanityName: orgDetails.vanityName,
-              logo: logoUrl,
-              role: acl.role,
-              type: "organization",
-            });
-          }
-        } catch (orgError) {
-          console.error(`[Organizations] Error fetching org ${acl.organization}:`, orgError);
-          // Continue with other organizations
-        }
-      }
-    } catch (aclError) {
-      console.error("[Organizations] Error fetching ACLs:", aclError);
-      // Continue without organization data - user might not have org access
-    }
-
-    // Also try to get organizations where user is a content poster
-    try {
-      const posterAclsResponse = await fetchWithAuth(
-        `${LINKEDIN_API_BASE}/v2/organizationAcls?q=roleAssignee&role=DIRECT_SPONSORED_CONTENT_POSTER&state=APPROVED`,
-        accessToken
-      );
-
-      const posterAcls: OrganizationAcl[] = posterAclsResponse.elements || [];
-
-      for (const acl of posterAcls) {
-        // Skip if already added as admin
         const orgId = acl.organization.split(":").pop();
-        if (organizations.some((o) => o.id === orgId)) continue;
+        if (!orgId) continue;
 
-        try {
-          if (orgId) {
-            const orgDetails = await fetchWithAuth(
-              `${LINKEDIN_API_BASE}/v2/organizations/${orgId}`,
-              accessToken
-            );
+        const orgResult = await fetchWithAuth<{
+          localizedName?: string;
+          name?: { localized?: { en_US?: string } };
+          vanityName?: string;
+          logoV2?: {
+            original?: string;
+            "cropped~"?: {
+              elements?: Array<{
+                identifiers?: Array<{ identifier?: string }>;
+              }>;
+            };
+          };
+        }>(`${LINKEDIN_API_BASE}/v2/organizations/${orgId}`, accessToken);
 
-            let logoUrl: string | undefined;
-            if (orgDetails.logoV2?.["cropped~"]?.elements?.[0]?.identifiers?.[0]?.identifier) {
-              logoUrl = orgDetails.logoV2["cropped~"].elements[0].identifiers[0].identifier;
-            }
-
-            organizations.push({
-              id: orgId,
-              urn: acl.organization,
-              name: orgDetails.localizedName || `Organization ${orgId}`,
-              vanityName: orgDetails.vanityName,
-              logo: logoUrl,
-              role: acl.role,
-              type: "organization",
-            });
+        if (orgResult.data) {
+          let logoUrl: string | undefined;
+          if (orgResult.data.logoV2?.["cropped~"]?.elements?.[0]?.identifiers?.[0]?.identifier) {
+            logoUrl = orgResult.data.logoV2["cropped~"].elements[0].identifiers[0].identifier;
+          } else if (orgResult.data.logoV2?.original) {
+            logoUrl = orgResult.data.logoV2.original;
           }
-        } catch (orgError) {
-          console.error(`[Organizations] Error fetching poster org:`, orgError);
+
+          organizations.push({
+            id: orgId,
+            urn: acl.organization,
+            name: orgResult.data.localizedName || orgResult.data.name?.localized?.en_US || `Organization ${orgId}`,
+            vanityName: orgResult.data.vanityName,
+            logo: logoUrl,
+            role: acl.role,
+            type: "organization",
+          });
         }
       }
-    } catch {
-      // Ignore poster ACL errors
     }
 
     // Include personal profile as an option
@@ -176,6 +129,10 @@ export async function GET() {
     return NextResponse.json({
       personal: personalProfile,
       organizations,
+      permissions: {
+        hasOrgAccess: hasOrgPermission,
+        error: orgPermissionError,
+      },
     });
   } catch (error) {
     console.error("[Organizations] Error:", error);

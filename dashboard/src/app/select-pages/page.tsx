@@ -17,6 +17,10 @@ interface LinkedInPage {
 interface OrganizationsResponse {
   personal: LinkedInPage;
   organizations: LinkedInPage[];
+  permissions?: {
+    hasOrgAccess: boolean;
+    error: string | null;
+  };
 }
 
 export default function SelectPagesPage() {
@@ -27,6 +31,7 @@ export default function SelectPagesPage() {
   const [personalProfile, setPersonalProfile] = useState<LinkedInPage | null>(null);
   const [organizations, setOrganizations] = useState<LinkedInPage[]>([]);
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
+  const [permissionWarning, setPermissionWarning] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchOrganizations() {
@@ -55,6 +60,11 @@ export default function SelectPagesPage() {
 
         setPersonalProfile(data.personal);
         setOrganizations(data.organizations || []);
+
+        // Check for permission warnings
+        if (data.permissions && !data.permissions.hasOrgAccess) {
+          setPermissionWarning(data.permissions.error);
+        }
 
         // Auto-select personal profile by default
         if (data.personal) {
@@ -180,12 +190,26 @@ export default function SelectPagesPage() {
               </div>
             )}
 
+            {/* Permission warning */}
+            {permissionWarning && (
+              <div className="mt-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">Limited API Access</p>
+                    <p className="text-sm text-amber-700 mt-1">{permissionWarning}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* No organizations message */}
-            {organizations.length === 0 && (
+            {organizations.length === 0 && !permissionWarning && (
               <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <p className="text-sm text-gray-600 text-center">
-                  No organization pages found. You may not have admin access to any LinkedIn pages,
-                  or your LinkedIn app may need additional permissions.
+                  No organization pages found. You may not have admin access to any LinkedIn pages.
                 </p>
               </div>
             )}
@@ -230,8 +254,53 @@ export default function SelectPagesPage() {
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-4">
-          You can change your selection later from settings
+          You can change your selection later from the user menu
         </p>
+
+        {/* API Products Info */}
+        <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">
+            Required LinkedIn API Products
+          </h3>
+          <p className="text-sm text-gray-600 mb-4">
+            To access full analytics and organization pages, your LinkedIn app needs these products:
+          </p>
+          <ul className="space-y-3">
+            <li className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Sign In with LinkedIn</p>
+                <p className="text-xs text-gray-500">For authentication (you have this)</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <svg className="w-3 h-3 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Community Management API</p>
+                <p className="text-xs text-gray-500">Required for reading posts, analytics, and organization pages</p>
+              </div>
+            </li>
+          </ul>
+          <a
+            href="https://www.linkedin.com/developers/apps"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+          >
+            Manage your LinkedIn app products
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        </div>
       </div>
     </div>
   );
