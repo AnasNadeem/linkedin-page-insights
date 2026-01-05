@@ -33,6 +33,7 @@ interface DataContextType {
     postsWithImages: number;
     avgPostLength: number;
   };
+  baseAvgImpressions: number;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -49,7 +50,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const response = await fetch('/fleetzz_data.json');
         if (!response.ok) throw new Error('Failed to load data');
         const data: LinkedInData = await response.json();
-        setAllPosts(data.data.posts.edges.map(edge => edge.node));
+        const posts = data.data.posts.edges.map(edge => edge.node);
+        console.log('Loaded posts:', posts.length);
+        console.log('Date range:', posts.length > 0 ? {
+          oldest: posts.reduce((min, p) => new Date(p.sentAt) < new Date(min.sentAt) ? p : min).sentAt,
+          newest: posts.reduce((max, p) => new Date(p.sentAt) > new Date(max.sentAt) ? p : max).sentAt
+        } : 'No posts');
+        setAllPosts(posts);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
@@ -59,17 +66,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
     loadData();
   }, []);
 
-  const avgImpressions = useMemo(() => calculateAvgMetric(allPosts, 'impressions'), [allPosts]);
+  // Calculate base average from ALL posts (for engagement level comparisons)
+  const baseAvgImpressions = useMemo(() => {
+    const avg = calculateAvgMetric(allPosts, 'impressions');
+    console.log('Base avg impressions:', avg);
+    return avg;
+  }, [allPosts]);
 
   const filteredPosts = useMemo(() => {
-    return allPosts.filter(post => {
+    console.log('Applying filters:', filters);
+    console.log('Total posts to filter:', allPosts.length);
+
+    const result = allPosts.filter(post => {
       // Date filter
       if (filters.dateRange !== 'all' && filters.dateRange !== 'custom') {
         const days = parseInt(filters.dateRange);
         const postDate = new Date(post.sentAt);
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - days);
-        if (postDate < cutoff) return false;
+
+        if (postDate < cutoff) {
+          return false;
+        }
       }
 
       if (filters.dateRange === 'custom') {
@@ -91,17 +109,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (!postHashtags.includes(filters.hashtag)) return false;
       }
 
-      // Engagement filter
-      if (filters.engagement !== 'all') {
+      // Engagement filter - uses base average from ALL posts
+      if (filters.engagement !== 'all' && baseAvgImpressions > 0) {
         const impressions = getMetric(post, 'impressions');
-        if (filters.engagement === 'high' && impressions < avgImpressions * 1.5) return false;
-        if (filters.engagement === 'medium' && (impressions < avgImpressions * 0.5 || impressions > avgImpressions * 1.5)) return false;
-        if (filters.engagement === 'low' && impressions > avgImpressions * 0.5) return false;
+        if (filters.engagement === 'high' && impressions < baseAvgImpressions * 1.5) return false;
+        if (filters.engagement === 'medium' && (impressions < baseAvgImpressions * 0.5 || impressions > baseAvgImpressions * 1.5)) return false;
+        if (filters.engagement === 'low' && impressions >= baseAvgImpressions * 0.5) return false;
       }
 
       return true;
     });
-  }, [allPosts, filters, avgImpressions]);
+
+    console.log('Filtered posts count:', result.length);
+    return result;
+  }, [allPosts, filters, baseAvgImpressions]);
 
   const analytics = useMemo(() => {
     const posts = filteredPosts;
@@ -125,10 +146,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [filteredPosts]);
 
   const updateFilters = useCallback((newFilters: Partial<FilterState>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
+    console.log('Updating filters with:', newFilters);
+    setFilters(prev => {
+      const updated = { ...prev, ...newFilters };
+      console.log('New filter state:', updated);
+      return updated;
+    });
   }, []);
 
   const resetFilters = useCallback(() => {
+    console.log('Resetting filters');
     setFilters(defaultFilters);
   }, []);
 
@@ -141,7 +168,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       resetFilters,
       loading,
       error,
-      analytics
+      analytics,
+      baseAvgImpressions
     }}>
       {children}
     </DataContext.Provider>

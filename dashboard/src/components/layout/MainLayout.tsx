@@ -16,7 +16,8 @@ import {
   MessageSquare,
   Sparkles,
   Filter,
-  X
+  X,
+  ChevronDown
 } from 'lucide-react';
 
 const navItems = [
@@ -36,7 +37,7 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, showFilters = true }: MainLayoutProps) {
   const pathname = usePathname();
-  const { allPosts, filters, updateFilters, resetFilters, filteredPosts, analytics } = useData();
+  const { allPosts, filteredPosts, filters, updateFilters, resetFilters, analytics, baseAvgImpressions } = useData();
 
   const hashtags = getUniqueHashtags(allPosts);
   const sections = [...new Set(navItems.map(item => item.section))];
@@ -45,6 +46,32 @@ export function MainLayout({ children, showFilters = true }: MainLayoutProps) {
     filters.contentType !== 'all' ||
     filters.hashtag !== 'all' ||
     filters.engagement !== 'all';
+
+  // Count active filters
+  const activeFilterCount = [
+    filters.dateRange !== 'all',
+    filters.contentType !== 'all',
+    filters.hashtag !== 'all',
+    filters.engagement !== 'all'
+  ].filter(Boolean).length;
+
+  // Get filter labels for active filters
+  const getActiveFilterLabels = () => {
+    const labels: string[] = [];
+    if (filters.dateRange !== 'all') {
+      labels.push(filters.dateRange === 'custom' ? 'Custom Date' : `Last ${filters.dateRange} days`);
+    }
+    if (filters.contentType !== 'all') {
+      labels.push(filters.contentType === 'image' ? 'With Images' : 'Text Only');
+    }
+    if (filters.hashtag !== 'all') {
+      labels.push(filters.hashtag);
+    }
+    if (filters.engagement !== 'all') {
+      labels.push(`${filters.engagement.charAt(0).toUpperCase() + filters.engagement.slice(1)} Engagement`);
+    }
+    return labels;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -74,6 +101,11 @@ export function MainLayout({ children, showFilters = true }: MainLayoutProps) {
               <div className="text-[10px] text-gray-500 uppercase">Avg Views</div>
             </div>
           </div>
+          {hasActiveFilters && (
+            <div className="mt-2 text-xs text-center text-blue-600">
+              {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} active
+            </div>
+          )}
         </div>
 
         <nav className="py-4">
@@ -127,12 +159,23 @@ export function MainLayout({ children, showFilters = true }: MainLayoutProps) {
               <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <Filter size={16} />
                 Filters
+                {hasActiveFilters && (
+                  <span className="bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full">
+                    {activeFilterCount}
+                  </span>
+                )}
               </div>
 
               <select
                 value={filters.dateRange}
-                onChange={e => updateFilters({ dateRange: e.target.value as any })}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={e => {
+                  console.log('Date range changed to:', e.target.value);
+                  updateFilters({ dateRange: e.target.value as any });
+                }}
+                className={cn(
+                  "px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                  filters.dateRange !== 'all' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-900'
+                )}
               >
                 <option value="all">All Time</option>
                 <option value="7">Last 7 Days</option>
@@ -142,8 +185,14 @@ export function MainLayout({ children, showFilters = true }: MainLayoutProps) {
 
               <select
                 value={filters.contentType}
-                onChange={e => updateFilters({ contentType: e.target.value as any })}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={e => {
+                  console.log('Content type changed to:', e.target.value);
+                  updateFilters({ contentType: e.target.value as any });
+                }}
+                className={cn(
+                  "px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                  filters.contentType !== 'all' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-900'
+                )}
               >
                 <option value="all">All Types</option>
                 <option value="image">With Images</option>
@@ -152,8 +201,14 @@ export function MainLayout({ children, showFilters = true }: MainLayoutProps) {
 
               <select
                 value={filters.hashtag}
-                onChange={e => updateFilters({ hashtag: e.target.value })}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={e => {
+                  console.log('Hashtag changed to:', e.target.value);
+                  updateFilters({ hashtag: e.target.value });
+                }}
+                className={cn(
+                  "px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                  filters.hashtag !== 'all' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-900'
+                )}
               >
                 <option value="all">All Hashtags</option>
                 {hashtags.map(tag => (
@@ -163,29 +218,51 @@ export function MainLayout({ children, showFilters = true }: MainLayoutProps) {
 
               <select
                 value={filters.engagement}
-                onChange={e => updateFilters({ engagement: e.target.value as any })}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={e => {
+                  console.log('Engagement changed to:', e.target.value);
+                  updateFilters({ engagement: e.target.value as any });
+                }}
+                className={cn(
+                  "px-3 py-1.5 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                  filters.engagement !== 'all' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-900'
+                )}
               >
                 <option value="all">All Engagement</option>
-                <option value="high">High Performers</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low Performers</option>
+                <option value="high">High (&gt;{Math.round(baseAvgImpressions * 1.5)} views)</option>
+                <option value="medium">Medium ({Math.round(baseAvgImpressions * 0.5)}-{Math.round(baseAvgImpressions * 1.5)} views)</option>
+                <option value="low">Low (&lt;{Math.round(baseAvgImpressions * 0.5)} views)</option>
               </select>
 
               {hasActiveFilters && (
                 <button
-                  onClick={resetFilters}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  onClick={() => {
+                    console.log('Clearing all filters');
+                    resetFilters();
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
                 >
                   <X size={14} />
-                  Clear
+                  Clear All
                 </button>
               )}
 
-              <div className="ml-auto text-sm text-gray-500">
-                Showing <span className="font-medium text-gray-900">{filteredPosts.length}</span> of {allPosts.length} posts
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-sm text-gray-500">
+                  Showing <span className="font-semibold text-gray-900">{filteredPosts.length}</span> of {allPosts.length} posts
+                </span>
               </div>
             </div>
+
+            {/* Active filter tags */}
+            {hasActiveFilters && (
+              <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
+                {getActiveFilterLabels().map((label, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                    {label}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
