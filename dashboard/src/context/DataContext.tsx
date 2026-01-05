@@ -1,6 +1,8 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter, usePathname } from 'next/navigation';
 import { Post, FilterState, LinkedInData } from '@/types/linkedin';
 import { getMetric, getHashtags, hasImages, calculateAvgMetric } from '@/lib/utils';
 
@@ -34,49 +36,101 @@ interface DataContextType {
     avgPostLength: number;
   };
   baseAvgImpressions: number;
+  selectedOrganization: string | null;
+  setSelectedOrganization: (orgId: string | null) => void;
+  refreshData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+// Routes that don't require authentication or organization selection
+const publicRoutes = ['/login', '/select-page'];
+
 export function DataProvider({ children }: { children: ReactNode }) {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedOrganization, setSelectedOrganizationState] = useState<string | null>(null);
 
+  // Load selected organization from localStorage on mount
   useEffect(() => {
-    async function loadData() {
-      try {
-        const response = await fetch('/fleetzz_data.json');
-        if (!response.ok) throw new Error('Failed to load data');
-        const data: LinkedInData = await response.json();
-        const posts = data.data.posts.edges.map(edge => edge.node);
-        console.log('Loaded posts:', posts.length);
-        console.log('Date range:', posts.length > 0 ? {
-          oldest: posts.reduce((min, p) => new Date(p.sentAt) < new Date(min.sentAt) ? p : min).sentAt,
-          newest: posts.reduce((max, p) => new Date(p.sentAt) > new Date(max.sentAt) ? p : max).sentAt
-        } : 'No posts');
-        setAllPosts(posts);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setLoading(false);
-      }
+    const savedOrg = localStorage.getItem('selectedOrganization');
+    if (savedOrg) {
+      setSelectedOrganizationState(savedOrg);
     }
-    loadData();
   }, []);
+
+  // Handle authentication redirects
+  useEffect(() => {
+    if (status === 'loading') return;
+
+    const isPublicRoute = publicRoutes.some(route => pathname?.startsWith(route));
+
+    if (status === 'unauthenticated' && !isPublicRoute) {
+      router.push('/login');
+    }
+  }, [status, pathname, router]);
+
+  // Handle organization selection redirects
+  useEffect(() => {
+    if (status === 'loading') return;
+
+    const isPublicRoute = publicRoutes.some(route => pathname?.startsWith(route));
+
+    if (status === 'authenticated' && !selectedOrganization && !isPublicRoute) {
+      router.push('/select-page');
+    }
+  }, [status, selectedOrganization, pathname, router]);
+
+  const loadData = useCallback(async () => {
+    if (!session?.accessToken || !selectedOrganization) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/linkedin/organizations/${selectedOrganization}/posts`);
+      if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/login');
+          return;
+        }
+        throw new Error('Failed to load data');
+      }
+      const data: LinkedInData = await response.json();
+      const posts = data.data.posts.edges.map(edge => edge.node);
+      console.log('Loaded posts:', posts.length);
+      setAllPosts(posts);
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  }, [session?.accessToken, selectedOrganization, router]);
+
+  // Load data when authenticated and organization is selected
+  useEffect(() => {
+    if (session?.accessToken && selectedOrganization) {
+      loadData();
+    }
+  }, [session?.accessToken, selectedOrganization, loadData]);
 
   // Calculate base average from ALL posts (for engagement level comparisons)
   const baseAvgImpressions = useMemo(() => {
     const avg = calculateAvgMetric(allPosts, 'impressions');
-    console.log('Base avg impressions:', avg);
     return avg;
   }, [allPosts]);
 
   const filteredPosts = useMemo(() => {
-    console.log('Applying filters:', filters);
-    console.log('Total posts to filter:', allPosts.length);
-
     const result = allPosts.filter(post => {
       // Date filter
       if (filters.dateRange !== 'all' && filters.dateRange !== 'custom') {
@@ -120,7 +174,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return true;
     });
 
-    console.log('Filtered posts count:', result.length);
     return result;
   }, [allPosts, filters, baseAvgImpressions]);
 
@@ -146,17 +199,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [filteredPosts]);
 
   const updateFilters = useCallback((newFilters: Partial<FilterState>) => {
-    console.log('Updating filters with:', newFilters);
-    setFilters(prev => {
-      const updated = { ...prev, ...newFilters };
-      console.log('New filter state:', updated);
-      return updated;
-    });
+    setFilters(prev => ({ ...prev, ...newFilters }));
   }, []);
 
   const resetFilters = useCallback(() => {
-    console.log('Resetting filters');
     setFilters(defaultFilters);
+  }, []);
+
+  const refreshData = useCallback(async () => {
+    await loadData();
+  }, [loadData]);
+
+  const setSelectedOrganization = useCallback((orgId: string | null) => {
+    setSelectedOrganizationState(orgId);
+    if (orgId) {
+      localStorage.setItem('selectedOrganization', orgId);
+    } else {
+      localStorage.removeItem('selectedOrganization');
+    }
   }, []);
 
   return (
@@ -169,7 +229,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       analytics,
-      baseAvgImpressions
+      baseAvgImpressions,
+      selectedOrganization,
+      setSelectedOrganization,
+      refreshData
     }}>
       {children}
     </DataContext.Provider>

@@ -19,6 +19,7 @@ import {
   X,
   ChevronDown
 } from 'lucide-react';
+import { UserMenu } from './UserMenu';
 
 const navItems = [
   { href: '/', label: 'Overview', icon: LayoutDashboard, section: 'Analytics' },
@@ -246,10 +247,11 @@ export function MainLayout({ children, showFilters = true }: MainLayoutProps) {
                 </button>
               )}
 
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-4">
                 <span className="text-sm text-gray-500">
                   Showing <span className="font-semibold text-gray-900">{filteredPosts.length}</span> of {allPosts.length} posts
                 </span>
+                <UserMenu />
               </div>
             </div>
 
