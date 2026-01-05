@@ -1,18 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { signOut, useSession } from "next-auth/react";
 import { useData } from "@/context/DataContext";
 import { LogOut, ChevronDown, RefreshCw } from "lucide-react";
 
 export function UserMenu() {
-  const { data: session } = useSession();
-  const { refreshData, loading } = useData();
+  const { user, refreshData, loading, logout } = useData();
   const [isOpen, setIsOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleSignOut = async () => {
-    await signOut({ callbackUrl: "/login" });
+    await logout();
   };
 
   const handleRefresh = async () => {
@@ -22,7 +20,7 @@ export function UserMenu() {
     setIsOpen(false);
   };
 
-  if (!session?.user) return null;
+  if (!user) return null;
 
   return (
     <div className="relative">
@@ -30,15 +28,15 @@ export function UserMenu() {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
       >
-        {session.user.image ? (
+        {user.image ? (
           <img
-            src={session.user.image}
-            alt={session.user.name || "User"}
+            src={user.image}
+            alt={user.name || "User"}
             className="w-8 h-8 rounded-full"
           />
         ) : (
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
-            {session.user.name?.[0] || "U"}
+            {user.name?.[0] || "U"}
           </div>
         )}
         <ChevronDown size={16} className="text-gray-500" />
@@ -53,10 +51,10 @@ export function UserMenu() {
           <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
             <div className="p-3 border-b border-gray-100">
               <p className="font-medium text-gray-900 truncate">
-                {session.user.name}
+                {user.name}
               </p>
               <p className="text-sm text-gray-500 truncate">
-                {session.user.email}
+                {user.email}
               </p>
             </div>
             <div className="p-2">

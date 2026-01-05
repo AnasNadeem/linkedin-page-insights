@@ -1,26 +1,40 @@
 "use client";
 
-import { signIn, useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
-  const { status } = useSession();
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+  const error = searchParams.get("error");
 
   useEffect(() => {
-    if (status === "authenticated") {
-      router.push("/");
+    // Check if already logged in
+    async function checkSession() {
+      try {
+        const res = await fetch("/api/auth/session");
+        const data = await res.json();
+        if (data.user) {
+          router.push("/");
+        }
+      } catch {
+        // Not logged in
+      } finally {
+        setIsChecking(false);
+      }
     }
-  }, [status, router]);
+    checkSession();
+  }, [router]);
 
-  const handleLinkedInLogin = async () => {
+  const handleLinkedInLogin = () => {
     setIsLoading(true);
-    await signIn("linkedin", { callbackUrl: "/" });
+    // Redirect to our custom LinkedIn OAuth endpoint
+    window.location.href = "/api/auth/linkedin";
   };
 
-  if (status === "loading") {
+  if (isChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="w-10 h-10 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -41,10 +55,15 @@ export default function LoginPage() {
             LinkedIn Page Insights
           </h1>
           <p className="text-gray-600 mt-2">
-            Analyze your LinkedIn company page performance with powerful
-            analytics
+            Analyze your LinkedIn page performance with powerful analytics
           </p>
         </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-600">{decodeURIComponent(error)}</p>
+          </div>
+        )}
 
         <button
           onClick={handleLinkedInLogin}
@@ -70,7 +89,7 @@ export default function LoginPage() {
 
         <div className="mt-6 text-center text-sm text-gray-500">
           <p>
-            By signing in, you grant access to view your company page analytics.
+            By signing in, you grant access to view your LinkedIn posts and analytics.
           </p>
         </div>
 
@@ -81,15 +100,27 @@ export default function LoginPage() {
           <ul className="text-sm text-gray-600 space-y-2">
             <li className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
-              View organization posts and analytics
+              View your profile information
             </li>
             <li className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
-              Manage organization pages you administer
+              Access your posts and engagement data
             </li>
           </ul>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-10 h-10 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin"></div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

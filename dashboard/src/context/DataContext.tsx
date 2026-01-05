@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
-import { useSession } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Post, FilterState, LinkedInData } from '@/types/linkedin';
 import { getMetric, getHashtags, hasImages, calculateAvgMetric } from '@/lib/utils';
@@ -14,6 +13,13 @@ const defaultFilters: FilterState = {
   hashtag: 'all',
   engagement: 'all'
 };
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  image?: string;
+}
 
 interface DataContextType {
   allPosts: Post[];
@@ -37,6 +43,9 @@ interface DataContextType {
   };
   baseAvgImpressions: number;
   refreshData: () => Promise<void>;
+  user: User | null;
+  isAuthenticated: boolean;
+  logout: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -45,7 +54,6 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 const publicRoutes = ['/login'];
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -54,20 +62,42 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
+
+  // Check session on mount
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const res = await fetch('/api/auth/session');
+        const data = await res.json();
+        if (data.user) {
+          setUser(data.user);
+          setAccessToken(data.accessToken);
+        }
+      } catch {
+        // Not logged in
+      } finally {
+        setSessionChecked(true);
+      }
+    }
+    checkSession();
+  }, []);
 
   // Handle authentication redirects
   useEffect(() => {
-    if (status === 'loading') return;
+    if (!sessionChecked) return;
 
     const isPublicRoute = publicRoutes.some(route => pathname?.startsWith(route));
 
-    if (status === 'unauthenticated' && !isPublicRoute) {
+    if (!user && !isPublicRoute) {
       router.push('/login');
     }
-  }, [status, pathname, router]);
+  }, [sessionChecked, user, pathname, router]);
 
   const loadData = useCallback(async () => {
-    if (!session?.accessToken) {
+    if (!accessToken) {
       setLoading(false);
       return;
     }
@@ -80,6 +110,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) {
         if (response.status === 401) {
+          setUser(null);
+          setAccessToken(null);
           router.push('/login');
           return;
         }
@@ -98,14 +130,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [session?.accessToken, router]);
+  }, [accessToken, router]);
 
   // Load data when authenticated
   useEffect(() => {
-    if (status === 'authenticated' && session?.accessToken && !dataLoaded) {
+    if (sessionChecked && accessToken && !dataLoaded) {
       loadData();
     }
-  }, [status, session?.accessToken, dataLoaded, loadData]);
+  }, [sessionChecked, accessToken, dataLoaded, loadData]);
 
   // Calculate base average from ALL posts (for engagement level comparisons)
   const baseAvgImpressions = useMemo(() => {
@@ -194,6 +226,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await loadData();
   }, [loadData]);
 
+  const logout = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignore errors
+    }
+    setUser(null);
+    setAccessToken(null);
+    setAllPosts([]);
+    setDataLoaded(false);
+    router.push('/login');
+  }, [router]);
+
   return (
     <DataContext.Provider value={{
       allPosts,
@@ -205,7 +250,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       error,
       analytics,
       baseAvgImpressions,
-      refreshData
+      refreshData,
+      user,
+      isAuthenticated: !!user,
+      logout
     }}>
       {children}
     </DataContext.Provider>
