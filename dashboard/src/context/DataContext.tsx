@@ -51,7 +51,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 // Routes that don't require authentication
-const publicRoutes = ['/login'];
+const publicRoutes = ['/login', '/select-pages'];
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const router = useRouter();

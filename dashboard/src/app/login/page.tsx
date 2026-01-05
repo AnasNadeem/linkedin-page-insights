@@ -17,7 +17,14 @@ function LoginContent() {
         const res = await fetch("/api/auth/session");
         const data = await res.json();
         if (data.user) {
-          router.push("/");
+          // Check if user has selected pages
+          const pagesRes = await fetch("/api/linkedin/select-pages");
+          const pagesData = await pagesRes.json();
+          if (pagesData.selectedPages && pagesData.selectedPages.length > 0) {
+            router.push("/");
+          } else {
+            router.push("/select-pages");
+          }
         }
       } catch {
         // Not logged in
@@ -105,6 +112,10 @@ function LoginContent() {
             <li className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
               Access your posts and engagement data
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+              View organization pages you manage
             </li>
           </ul>
         </div>

@@ -59,6 +59,7 @@ export interface Channel {
   isDisconnected: boolean;
   locationData: string | null;
   scopes: string[];
+  pageUrn?: string; // URN of the page/organization
 }
 
 export interface PostMetadata {

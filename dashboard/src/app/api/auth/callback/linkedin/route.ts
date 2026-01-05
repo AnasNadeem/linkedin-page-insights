@@ -108,9 +108,10 @@ export async function GET(request: NextRequest) {
       path: "/",
     });
 
-    console.log("[LinkedIn OAuth] Session created, redirecting to home...");
+    console.log("[LinkedIn OAuth] Session created, redirecting to page selection...");
 
-    return NextResponse.redirect(new URL("/", request.url));
+    // Redirect to page selection instead of home
+    return NextResponse.redirect(new URL("/select-pages", request.url));
   } catch (err) {
     console.error("[LinkedIn OAuth] Error:", err);
     return NextResponse.redirect(new URL("/login?error=Authentication+failed", request.url));

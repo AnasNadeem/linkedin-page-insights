@@ -1,0 +1,311 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+
+interface LinkedInPage {
+  id: string;
+  urn: string;
+  name: string;
+  vanityName?: string;
+  logo?: string;
+  role: string;
+  type: "personal" | "organization";
+}
+
+interface OrganizationsResponse {
+  personal: LinkedInPage;
+  organizations: LinkedInPage[];
+}
+
+export default function SelectPagesPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [personalProfile, setPersonalProfile] = useState<LinkedInPage | null>(null);
+  const [organizations, setOrganizations] = useState<LinkedInPage[]>([]);
+  const [selectedPages, setSelectedPages] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function fetchOrganizations() {
+      try {
+        // First check if user is authenticated
+        const sessionRes = await fetch("/api/auth/session");
+        const sessionData = await sessionRes.json();
+
+        if (!sessionData.user) {
+          router.push("/login");
+          return;
+        }
+
+        // Fetch organizations
+        const res = await fetch("/api/linkedin/organizations");
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            router.push("/login");
+            return;
+          }
+          throw new Error("Failed to fetch organizations");
+        }
+
+        const data: OrganizationsResponse = await res.json();
+
+        setPersonalProfile(data.personal);
+        setOrganizations(data.organizations || []);
+
+        // Auto-select personal profile by default
+        if (data.personal) {
+          setSelectedPages([data.personal.urn]);
+        }
+      } catch (err) {
+        console.error("Error fetching organizations:", err);
+        setError(err instanceof Error ? err.message : "Failed to load pages");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchOrganizations();
+  }, [router]);
+
+  const togglePage = (urn: string) => {
+    setSelectedPages((prev) =>
+      prev.includes(urn)
+        ? prev.filter((p) => p !== urn)
+        : [...prev, urn]
+    );
+  };
+
+  const handleContinue = async () => {
+    if (selectedPages.length === 0) {
+      setError("Please select at least one page to analyze");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      // Save selected pages to session
+      const res = await fetch("/api/linkedin/select-pages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ selectedPages }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to save selection");
+      }
+
+      // Redirect to dashboard
+      router.push("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save selection");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading your LinkedIn pages...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="#0a66c2">
+                <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Select Pages to Analyze
+            </h1>
+            <p className="text-gray-600 mt-2">
+              Choose which LinkedIn profiles and pages you want to analyze
+            </p>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {/* Personal Profile Section */}
+            {personalProfile && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Personal Profile
+                </h3>
+                <PageCard
+                  page={personalProfile}
+                  selected={selectedPages.includes(personalProfile.urn)}
+                  onToggle={() => togglePage(personalProfile.urn)}
+                />
+              </div>
+            )}
+
+            {/* Organization Pages Section */}
+            {organizations.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Organization Pages
+                </h3>
+                <div className="space-y-3">
+                  {organizations.map((org) => (
+                    <PageCard
+                      key={org.id}
+                      page={org}
+                      selected={selectedPages.includes(org.urn)}
+                      onToggle={() => togglePage(org.urn)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* No organizations message */}
+            {organizations.length === 0 && (
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm text-gray-600 text-center">
+                  No organization pages found. You may not have admin access to any LinkedIn pages,
+                  or your LinkedIn app may need additional permissions.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                {selectedPages.length} page{selectedPages.length !== 1 ? "s" : ""} selected
+              </p>
+              <button
+                onClick={handleContinue}
+                disabled={selectedPages.length === 0 || saving}
+                className="px-6 py-3 bg-[#0a66c2] hover:bg-[#004182] text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {saving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    Continue to Dashboard
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-center text-sm text-gray-500 mt-4">
+          You can change your selection later from settings
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PageCard({
+  page,
+  selected,
+  onToggle,
+}: {
+  page: LinkedInPage;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`w-full flex items-center gap-4 p-4 rounded-lg border-2 transition-all text-left ${
+        selected
+          ? "border-blue-500 bg-blue-50"
+          : "border-gray-200 hover:border-gray-300 bg-white"
+      }`}
+    >
+      <div
+        className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+          selected
+            ? "border-blue-500 bg-blue-500"
+            : "border-gray-300"
+        }`}
+      >
+        {selected && (
+          <svg
+            className="w-3 h-3 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={3}
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        )}
+      </div>
+
+      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+        {page.logo ? (
+          <Image
+            src={page.logo}
+            alt={page.name}
+            width={48}
+            height={48}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <span className="text-xl font-semibold text-gray-600">
+            {page.name.charAt(0).toUpperCase()}
+          </span>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-gray-900 truncate">{page.name}</p>
+        <p className="text-sm text-gray-500">
+          {page.type === "personal" ? "Personal Profile" : "Organization Page"}
+          {page.role && page.type !== "personal" && (
+            <span className="ml-2 px-2 py-0.5 bg-gray-100 rounded text-xs">
+              {page.role.replace(/_/g, " ")}
+            </span>
+          )}
+        </p>
+      </div>
+    </button>
+  );
+}

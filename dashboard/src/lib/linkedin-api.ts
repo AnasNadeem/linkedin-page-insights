@@ -79,7 +79,7 @@ export class LinkedInApiService {
     return this.fetch<UserProfile>("/userinfo");
   }
 
-  // Get user's own posts using the Posts API
+  // Get posts for a specific author (person or organization)
   async getUserPosts(authorUrn: string, count = 50): Promise<LinkedInPost[]> {
     try {
       // Try the posts endpoint first (newer API)
@@ -101,6 +101,49 @@ export class LinkedInApiService {
         return [];
       }
     }
+  }
+
+  // Get posts for multiple authors (persons and organizations)
+  async getPostsForMultipleAuthors(authorUrns: string[], count = 50): Promise<LinkedInPost[]> {
+    const allPosts: LinkedInPost[] = [];
+
+    for (const authorUrn of authorUrns) {
+      try {
+        const posts = await this.getUserPosts(authorUrn, count);
+        // Add author info to each post for identification
+        allPosts.push(...posts);
+      } catch (error) {
+        console.error(`Error fetching posts for ${authorUrn}:`, error);
+      }
+    }
+
+    // Sort by creation time descending
+    return allPosts.sort((a, b) => (b.created?.time || 0) - (a.created?.time || 0));
+  }
+
+  // Get organization posts analytics (more detailed for org pages)
+  async getOrganizationPostsAnalytics(organizationUrn: string): Promise<Map<string, PostAnalytics["totalShareStatistics"]>> {
+    const analyticsMap = new Map<string, PostAnalytics["totalShareStatistics"]>();
+
+    try {
+      // Try organizational share statistics endpoint
+      const response = await this.fetch<{ elements: Array<{
+        totalShareStatistics: PostAnalytics["totalShareStatistics"];
+        share: string;
+      }> }>(
+        `/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=${encodeURIComponent(organizationUrn)}`
+      );
+
+      for (const element of response.elements || []) {
+        if (element.share && element.totalShareStatistics) {
+          analyticsMap.set(element.share, element.totalShareStatistics);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching organization analytics:", error);
+    }
+
+    return analyticsMap;
   }
 
   // Get analytics for user's posts

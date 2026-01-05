@@ -1,5 +1,10 @@
 import { cookies } from "next/headers";
 
+export interface SelectedPage {
+  urn: string;
+  type: "personal" | "organization";
+}
+
 export interface Session {
   user: {
     id: string;
@@ -10,6 +15,7 @@ export interface Session {
   accessToken: string;
   refreshToken?: string;
   expiresAt: number;
+  selectedPages?: string[]; // Array of URNs
 }
 
 export async function getSession(): Promise<Session | null> {

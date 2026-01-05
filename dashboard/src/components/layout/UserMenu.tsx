@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useData } from "@/context/DataContext";
-import { LogOut, ChevronDown, RefreshCw } from "lucide-react";
+import { LogOut, ChevronDown, RefreshCw, Building2 } from "lucide-react";
 
 export function UserMenu() {
+  const router = useRouter();
   const { user, refreshData, loading, logout } = useData();
   const [isOpen, setIsOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -18,6 +20,11 @@ export function UserMenu() {
     await refreshData();
     setIsRefreshing(false);
     setIsOpen(false);
+  };
+
+  const handleChangePagesClick = () => {
+    setIsOpen(false);
+    router.push("/select-pages");
   };
 
   if (!user) return null;
@@ -58,6 +65,13 @@ export function UserMenu() {
               </p>
             </div>
             <div className="p-2">
+              <button
+                onClick={handleChangePagesClick}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              >
+                <Building2 size={16} />
+                Change Pages
+              </button>
               <button
                 onClick={handleRefresh}
                 disabled={loading || isRefreshing}

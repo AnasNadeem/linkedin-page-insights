@@ -45,10 +45,18 @@ function hasMedia(post: LinkedInPost): boolean {
   return false;
 }
 
+interface AuthorProfile {
+  sub: string;
+  name: string;
+  picture?: string;
+  type?: "personal" | "organization";
+  pageUrn?: string;
+}
+
 export function transformUserPosts(
   posts: LinkedInPost[],
   analytics: Map<string, PostAnalytics["totalShareStatistics"]>,
-  userProfile?: { sub: string; name: string; picture?: string }
+  userProfile?: AuthorProfile
 ): PostEdge[] {
   return posts.map((post) => {
     const postUrn = post.id.startsWith("urn:") ? post.id : `urn:li:share:${post.id}`;
@@ -172,7 +180,7 @@ export function transformUserPosts(
       channel: {
         __typename: "Channel",
         id: userProfile?.sub || "",
-        type: "profile",
+        type: userProfile?.type === "organization" ? "page" : "profile",
         name: userProfile?.name || "",
         avatar: userProfile?.picture || "",
         service: "linkedin",
@@ -185,6 +193,7 @@ export function transformUserPosts(
         isDisconnected: false,
         locationData: null,
         scopes: [],
+        pageUrn: userProfile?.pageUrn,
       },
       tags: [],
       notes: [],
