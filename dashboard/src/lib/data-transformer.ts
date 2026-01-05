@@ -1,7 +1,9 @@
 import { Post, PostMetric, PostEdge, Annotation } from "@/types/linkedin";
-import { OrganizationShare, ShareStatisticsResponse, LinkedInOrganization } from "@/types/linkedin-api";
+import { LinkedInPost, PostAnalytics } from "./linkedin-api";
 
 function extractHashtags(text: string): Annotation[] {
+  if (!text) return [];
+
   const hashtagRegex = /#(\w+)/g;
   const annotations: Annotation[] = [];
   let match;
@@ -20,14 +22,37 @@ function extractHashtags(text: string): Annotation[] {
   return annotations;
 }
 
-export function transformLinkedInData(
-  posts: OrganizationShare[],
-  analytics: Map<string, ShareStatisticsResponse["elements"][0]["totalShareStatistics"]>,
-  organization?: LinkedInOrganization
+function getPostText(post: LinkedInPost): string {
+  // Try different locations where text might be
+  if (post.text) return post.text;
+
+  const shareContent = post.specificContent?.["com.linkedin.ugc.ShareContent"];
+  if (shareContent?.shareCommentary?.text) {
+    return shareContent.shareCommentary.text;
+  }
+
+  return "";
+}
+
+function hasMedia(post: LinkedInPost): boolean {
+  const shareContent = post.specificContent?.["com.linkedin.ugc.ShareContent"];
+  if (shareContent?.shareMediaCategory === "IMAGE" || shareContent?.shareMediaCategory === "VIDEO") {
+    return true;
+  }
+  if (shareContent?.media && shareContent.media.length > 0) {
+    return true;
+  }
+  return false;
+}
+
+export function transformUserPosts(
+  posts: LinkedInPost[],
+  analytics: Map<string, PostAnalytics["totalShareStatistics"]>,
+  userProfile?: { sub: string; name: string; picture?: string }
 ): PostEdge[] {
   return posts.map((post) => {
-    const shareUrn = `urn:li:share:${post.id}`;
-    const stats = analytics.get(shareUrn) || analytics.get(post.activity) || {
+    const postUrn = post.id.startsWith("urn:") ? post.id : `urn:li:share:${post.id}`;
+    const stats = analytics.get(postUrn) || analytics.get(post.id) || {
       impressionCount: 0,
       likeCount: 0,
       commentCount: 0,
@@ -35,8 +60,8 @@ export function transformLinkedInData(
       engagement: 0,
     };
 
-    const postText = post.text?.text || "";
-    const sentAt = new Date(post.created.time).toISOString();
+    const postText = getPostText(post);
+    const sentAt = new Date(post.created?.time || Date.now()).toISOString();
 
     const metrics: PostMetric[] = [
       {
@@ -84,23 +109,26 @@ export function transformLinkedInData(
         name: "engagementRate",
         displayName: "Engagement Rate",
         description: "Engagement rate percentage",
-        value: stats.engagement * 100,
+        value: stats.impressionCount > 0
+          ? ((stats.likeCount + stats.commentCount + stats.shareCount) / stats.impressionCount) * 100
+          : 0,
         nullableValue: stats.engagement * 100,
         unit: "percentage",
         __typename: "PostMetric",
       },
     ];
 
-    // Extract images from content entities
-    const assets = (post.content?.contentEntities || [])
-      .filter((entity) => entity.thumbnails && entity.thumbnails.length > 0)
-      .map((entity) => ({
+    // Extract media/images from post
+    const shareContent = post.specificContent?.["com.linkedin.ugc.ShareContent"];
+    const assets = (shareContent?.media || [])
+      .filter((m) => m.status === "READY" && m.media)
+      .map((m) => ({
         __typename: "ImageAsset" as const,
         mimeType: "image/jpeg",
-        thumbnail: entity.thumbnails?.[0]?.resolvedUrl || "",
-        source: entity.thumbnails?.[0]?.resolvedUrl || "",
+        thumbnail: m.originalUrl || "",
+        source: m.originalUrl || "",
         image: {
-          altText: "",
+          altText: m.title?.text || "",
           width: 0,
           height: 0,
           isAnimated: false,
@@ -121,38 +149,38 @@ export function transformLinkedInData(
       schedulingType: null,
       author: {
         __typename: "Author",
-        id: organization?.id || "",
+        id: userProfile?.sub || post.author || "",
         email: "",
-        name: organization?.localizedName || "",
-        avatar: organization?.logoV2?.original || "",
+        name: userProfile?.name || "",
+        avatar: userProfile?.picture || "",
         isDeleted: false,
       },
       isCustomScheduled: false,
       isPinned: false,
-      externalLink: `https://www.linkedin.com/feed/update/${post.activity}`,
+      externalLink: `https://www.linkedin.com/feed/update/${postUrn}`,
       createdAt: sentAt,
-      updatedAt: sentAt,
+      updatedAt: new Date(post.lastModified?.time || post.created?.time || Date.now()).toISOString(),
       metricsUpdatedAt: new Date().toISOString(),
       text: postText,
       metadata: {
         __typename: "LinkedInPostMetadata",
-        type: "post",
+        type: hasMedia(post) ? "image" : "text",
         annotations: extractHashtags(postText),
         firstComment: null,
         linkAttachment: null,
       },
       channel: {
         __typename: "Channel",
-        id: organization?.id || "",
-        type: "page",
-        name: organization?.localizedName || "",
-        avatar: organization?.logoV2?.original || "",
+        id: userProfile?.sub || "",
+        type: "profile",
+        name: userProfile?.name || "",
+        avatar: userProfile?.picture || "",
         service: "linkedin",
         products: ["analyze"],
-        serviceId: organization?.id || "",
+        serviceId: userProfile?.sub || "",
         serverUrl: null,
         timezone: "UTC",
-        displayName: organization?.localizedName || "",
+        displayName: userProfile?.name || "",
         isQueuePaused: false,
         isDisconnected: false,
         locationData: null,

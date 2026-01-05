@@ -1,13 +1,55 @@
-import {
-  LinkedInOrganization,
-  OrganizationAclsResponse,
-  OrganizationsResponse,
-  OrganizationShare,
-  SharesResponse,
-  ShareStatisticsResponse,
-} from "@/types/linkedin-api";
-
 const LINKEDIN_API_BASE = "https://api.linkedin.com/v2";
+
+export interface LinkedInPost {
+  id: string;
+  author: string;
+  lifecycleState: string;
+  visibility: {
+    "com.linkedin.ugc.MemberNetworkVisibility": string;
+  };
+  created: {
+    time: number;
+  };
+  lastModified: {
+    time: number;
+  };
+  specificContent?: {
+    "com.linkedin.ugc.ShareContent"?: {
+      shareCommentary?: {
+        text: string;
+      };
+      shareMediaCategory?: string;
+      media?: Array<{
+        status: string;
+        media?: string;
+        originalUrl?: string;
+        title?: {
+          text: string;
+        };
+      }>;
+    };
+  };
+  text?: string;
+}
+
+export interface PostAnalytics {
+  totalShareStatistics: {
+    shareCount: number;
+    clickCount: number;
+    engagement: number;
+    likeCount: number;
+    commentCount: number;
+    impressionCount: number;
+    uniqueImpressionsCount: number;
+  };
+}
+
+export interface UserProfile {
+  sub: string;
+  name: string;
+  email: string;
+  picture?: string;
+}
 
 export class LinkedInApiService {
   constructor(private accessToken: string) {}
@@ -32,73 +74,99 @@ export class LinkedInApiService {
     return response.json();
   }
 
-  async getAdministeredOrganizations(): Promise<LinkedInOrganization[]> {
-    // Get organization roles where user is admin
-    const rolesResponse = await this.fetch<OrganizationAclsResponse>(
-      "/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED"
-    );
-
-    if (!rolesResponse.elements || rolesResponse.elements.length === 0) {
-      return [];
-    }
-
-    // Extract organization URNs
-    const orgUrns = rolesResponse.elements.map((r) => r.organization);
-
-    // Batch fetch organization details
-    const orgIds = orgUrns.map((urn) => urn.replace("urn:li:organization:", ""));
-    const orgsResponse = await this.fetch<OrganizationsResponse>(
-      `/organizations?ids=List(${orgIds.join(",")})`
-    );
-
-    return Object.values(orgsResponse.results || {});
+  // Get current user profile
+  async getUserProfile(): Promise<UserProfile> {
+    return this.fetch<UserProfile>("/userinfo");
   }
 
-  async getOrganizationPosts(organizationId: string, count = 100): Promise<OrganizationShare[]> {
-    const response = await this.fetch<SharesResponse>(
-      `/shares?q=owners&owners=List(urn:li:organization:${organizationId})&count=${count}&sortBy=LAST_MODIFIED`
-    );
-    return response.elements || [];
-  }
+  // Get user's own posts using the Posts API
+  async getUserPosts(authorUrn: string, count = 50): Promise<LinkedInPost[]> {
+    try {
+      // Try the posts endpoint first (newer API)
+      const response = await this.fetch<{ elements: LinkedInPost[] }>(
+        `/posts?author=${encodeURIComponent(authorUrn)}&q=author&count=${count}`
+      );
+      return response.elements || [];
+    } catch (error) {
+      console.error("Error fetching posts via /posts endpoint:", error);
 
-  async getPostAnalytics(
-    organizationId: string,
-    shareUrns: string[]
-  ): Promise<Map<string, ShareStatisticsResponse["elements"][0]["totalShareStatistics"]>> {
-    if (shareUrns.length === 0) {
-      return new Map();
-    }
-
-    const analyticsMap = new Map<
-      string,
-      ShareStatisticsResponse["elements"][0]["totalShareStatistics"]
-    >();
-
-    // LinkedIn API has limits, so we batch the requests
-    const batchSize = 20;
-    for (let i = 0; i < shareUrns.length; i += batchSize) {
-      const batch = shareUrns.slice(i, i + batchSize);
-      const encodedShares = batch.map((urn) => encodeURIComponent(urn)).join(",");
-
+      // Fallback to ugcPosts endpoint
       try {
-        const response = await this.fetch<ShareStatisticsResponse>(
-          `/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=urn:li:organization:${organizationId}&shares=List(${encodedShares})`
+        const ugcResponse = await this.fetch<{ elements: LinkedInPost[] }>(
+          `/ugcPosts?q=authors&authors=List(${encodeURIComponent(authorUrn)})&count=${count}`
         );
+        return ugcResponse.elements || [];
+      } catch (ugcError) {
+        console.error("Error fetching ugcPosts:", ugcError);
+        return [];
+      }
+    }
+  }
 
-        for (const stat of response.elements || []) {
-          analyticsMap.set(stat.share, stat.totalShareStatistics);
-        }
+  // Get analytics for user's posts
+  async getPostAnalytics(postUrns: string[]): Promise<Map<string, PostAnalytics["totalShareStatistics"]>> {
+    const analyticsMap = new Map<string, PostAnalytics["totalShareStatistics"]>();
+
+    if (postUrns.length === 0) {
+      return analyticsMap;
+    }
+
+    // Try to fetch social actions (likes, comments) for each post
+    for (const postUrn of postUrns) {
+      try {
+        // Get social actions summary
+        const socialActions = await this.fetch<{
+          likes?: { count?: number };
+          comments?: { count?: number };
+        }>(`/socialActions/${encodeURIComponent(postUrn)}`);
+
+        analyticsMap.set(postUrn, {
+          likeCount: socialActions.likes?.count || 0,
+          commentCount: socialActions.comments?.count || 0,
+          shareCount: 0,
+          clickCount: 0,
+          engagement: 0,
+          impressionCount: 0,
+          uniqueImpressionsCount: 0,
+        });
       } catch (error) {
-        console.error("Error fetching analytics batch:", error);
+        // If we can't get analytics, set defaults
+        analyticsMap.set(postUrn, {
+          likeCount: 0,
+          commentCount: 0,
+          shareCount: 0,
+          clickCount: 0,
+          engagement: 0,
+          impressionCount: 0,
+          uniqueImpressionsCount: 0,
+        });
       }
     }
 
     return analyticsMap;
   }
 
-  async getOrganizationFollowerStats(organizationId: string) {
-    return this.fetch(
-      `/organizationalEntityFollowerStatistics?q=organizationalEntity&organizationalEntity=urn:li:organization:${organizationId}`
-    );
+  // Get reactions count for a specific post
+  async getPostReactions(postUrn: string): Promise<number> {
+    try {
+      const response = await this.fetch<{ paging?: { total?: number } }>(
+        `/reactions?q=entity&entity=${encodeURIComponent(postUrn)}`
+      );
+      return response.paging?.total || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  // Get comments count for a specific post
+  async getPostComments(postUrn: string): Promise<number> {
+    try {
+      const response = await this.fetch<{ paging?: { total?: number } }>(
+        `/socialActions/${encodeURIComponent(postUrn)}/comments`
+      );
+      return response.paging?.total || 0;
+    } catch {
+      return 0;
+    }
   }
 }

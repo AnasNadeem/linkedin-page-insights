@@ -11,13 +11,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      router.push("/select-page");
+      router.push("/");
     }
   }, [status, router]);
 
   const handleLinkedInLogin = async () => {
     setIsLoading(true);
-    await signIn("linkedin", { callbackUrl: "/select-page" });
+    await signIn("linkedin", { callbackUrl: "/" });
   };
 
   if (status === "loading") {

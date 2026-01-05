@@ -18,7 +18,7 @@ export default auth((req) => {
 
   // Redirect authenticated users away from login page
   if (isLoggedIn && pathname === "/login") {
-    return NextResponse.redirect(new URL("/select-page", req.url));
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
   return NextResponse.next();

@@ -44,16 +44,58 @@ export const {
     {
       id: "linkedin",
       name: "LinkedIn",
-      type: "oidc",
+      type: "oauth",
       clientId: process.env.LINKEDIN_CLIENT_ID!,
       clientSecret: process.env.LINKEDIN_CLIENT_SECRET!,
-      issuer: "https://www.linkedin.com/oauth",
       authorization: {
+        url: "https://www.linkedin.com/oauth/v2/authorization",
         params: {
           scope: "openid profile email w_member_social",
         },
       },
-      checks: ["state"],
+      token: {
+        url: "https://www.linkedin.com/oauth/v2/accessToken",
+        async request({ params, provider }: { params: Record<string, unknown>; provider: { callbackUrl: string } }) {
+          const response = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+              grant_type: "authorization_code",
+              code: params.code as string,
+              redirect_uri: provider.callbackUrl,
+              client_id: process.env.LINKEDIN_CLIENT_ID!,
+              client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
+            }),
+          });
+
+          const tokens = await response.json();
+
+          if (!response.ok) {
+            console.error("Token exchange error:", tokens);
+            throw new Error(tokens.error_description || "Token exchange failed");
+          }
+
+          return { tokens };
+        },
+      },
+      userinfo: {
+        url: "https://api.linkedin.com/v2/userinfo",
+        async request({ tokens }: { tokens: { access_token?: string } }) {
+          const response = await fetch("https://api.linkedin.com/v2/userinfo", {
+            headers: {
+              Authorization: `Bearer ${tokens.access_token}`,
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch user info");
+          }
+
+          return response.json();
+        },
+      },
       profile(profile) {
         return {
           id: profile.sub,

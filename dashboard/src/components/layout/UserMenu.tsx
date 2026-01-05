@@ -2,26 +2,17 @@
 
 import { useState } from "react";
 import { signOut, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { useData } from "@/context/DataContext";
-import { LogOut, ChevronDown, Building2, RefreshCw } from "lucide-react";
+import { LogOut, ChevronDown, RefreshCw } from "lucide-react";
 
 export function UserMenu() {
   const { data: session } = useSession();
-  const { setSelectedOrganization, refreshData, loading } = useData();
-  const router = useRouter();
+  const { refreshData, loading } = useData();
   const [isOpen, setIsOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleSignOut = async () => {
-    localStorage.removeItem("selectedOrganization");
     await signOut({ callbackUrl: "/login" });
-  };
-
-  const handleSwitchOrganization = () => {
-    setSelectedOrganization(null);
-    router.push("/select-page");
-    setIsOpen(false);
   };
 
   const handleRefresh = async () => {
@@ -79,13 +70,6 @@ export function UserMenu() {
                   className={isRefreshing ? "animate-spin" : ""}
                 />
                 Refresh Data
-              </button>
-              <button
-                onClick={handleSwitchOrganization}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-              >
-                <Building2 size={16} />
-                Switch Company Page
               </button>
               <button
                 onClick={handleSignOut}

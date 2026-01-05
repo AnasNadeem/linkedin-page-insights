@@ -36,15 +36,13 @@ interface DataContextType {
     avgPostLength: number;
   };
   baseAvgImpressions: number;
-  selectedOrganization: string | null;
-  setSelectedOrganization: (orgId: string | null) => void;
   refreshData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Routes that don't require authentication or organization selection
-const publicRoutes = ['/login', '/select-page'];
+// Routes that don't require authentication
+const publicRoutes = ['/login'];
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
@@ -55,15 +53,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedOrganization, setSelectedOrganizationState] = useState<string | null>(null);
-
-  // Load selected organization from localStorage on mount
-  useEffect(() => {
-    const savedOrg = localStorage.getItem('selectedOrganization');
-    if (savedOrg) {
-      setSelectedOrganizationState(savedOrg);
-    }
-  }, []);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // Handle authentication redirects
   useEffect(() => {
@@ -76,19 +66,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [status, pathname, router]);
 
-  // Handle organization selection redirects
-  useEffect(() => {
-    if (status === 'loading') return;
-
-    const isPublicRoute = publicRoutes.some(route => pathname?.startsWith(route));
-
-    if (status === 'authenticated' && !selectedOrganization && !isPublicRoute) {
-      router.push('/select-page');
-    }
-  }, [status, selectedOrganization, pathname, router]);
-
   const loadData = useCallback(async () => {
-    if (!session?.accessToken || !selectedOrganization) {
+    if (!session?.accessToken) {
       setLoading(false);
       return;
     }
@@ -97,32 +76,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      const response = await fetch(`/api/linkedin/organizations/${selectedOrganization}/posts`);
+      const response = await fetch('/api/linkedin/posts');
+
       if (!response.ok) {
         if (response.status === 401) {
           router.push('/login');
           return;
         }
-        throw new Error('Failed to load data');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to load data');
       }
+
       const data: LinkedInData = await response.json();
-      const posts = data.data.posts.edges.map(edge => edge.node);
+      const posts = data.data?.posts?.edges?.map(edge => edge.node) || [];
       console.log('Loaded posts:', posts.length);
       setAllPosts(posts);
+      setDataLoaded(true);
     } catch (err) {
       console.error('Error loading data:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
-  }, [session?.accessToken, selectedOrganization, router]);
+  }, [session?.accessToken, router]);
 
-  // Load data when authenticated and organization is selected
+  // Load data when authenticated
   useEffect(() => {
-    if (session?.accessToken && selectedOrganization) {
+    if (status === 'authenticated' && session?.accessToken && !dataLoaded) {
       loadData();
     }
-  }, [session?.accessToken, selectedOrganization, loadData]);
+  }, [status, session?.accessToken, dataLoaded, loadData]);
 
   // Calculate base average from ALL posts (for engagement level comparisons)
   const baseAvgImpressions = useMemo(() => {
@@ -207,17 +190,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshData = useCallback(async () => {
+    setDataLoaded(false);
     await loadData();
   }, [loadData]);
-
-  const setSelectedOrganization = useCallback((orgId: string | null) => {
-    setSelectedOrganizationState(orgId);
-    if (orgId) {
-      localStorage.setItem('selectedOrganization', orgId);
-    } else {
-      localStorage.removeItem('selectedOrganization');
-    }
-  }, []);
 
   return (
     <DataContext.Provider value={{
@@ -230,8 +205,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       error,
       analytics,
       baseAvgImpressions,
-      selectedOrganization,
-      setSelectedOrganization,
       refreshData
     }}>
       {children}
